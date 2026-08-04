@@ -228,6 +228,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <span style="flex:1"></span>
     <button class="btn btn-outline" onclick="importLayout()">取り込み</button>
     <button class="btn btn-outline" onclick="showLoginUI()" id="authBtn">ログイン</button>
+    <button class="btn btn-outline" onclick="showAdminPanel()" id="adminBtn" style="display:none">管理</button>
     <button class="btn btn-primary" onclick="showNewLayoutModal()">＋ 新規レイアウト</button>
   </div>
   <div id="galleryContent" class="gallery-grid"></div>
@@ -433,6 +434,14 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   </div>
 </div>
 
+<!-- Admin Modal -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header"><h3>ユーザー管理</h3><button class="modal-close" onclick="closeModal('adminModal')">&times;</button></div>
+    <div class="modal-body" id="adminContent" style="max-height:60vh;overflow-y:auto">読み込み中...</div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════
 // STATE
@@ -573,6 +582,14 @@ let fbApp = null, fbDb = null;
 try { fbApp = firebase.initializeApp(FB_CONFIG); fbDb = firebase.database(fbApp); } catch(e) {}
 let currentUser = null;
 let loginMode = 'login';
+const ADMIN_IDS = ['chodai'];
+
+function getLoginId(user) {
+  return (user && user.email || '').replace(/@uriba\.local$/, '');
+}
+function isAdmin() {
+  return currentUser && ADMIN_IDS.includes(getLoginId(currentUser));
+}
 
 function initFirebaseAuth() {
   if (!fbApp) return;
@@ -580,7 +597,19 @@ function initFirebaseAuth() {
     currentUser = user;
     updateAuthUI();
     if (user) {
-      startUserSync(user.uid);
+      const lid = getLoginId(user);
+      fbDb.ref('users_meta/' + user.uid).update({
+        loginId: lid,
+        lastActive: new Date().toISOString()
+      });
+      fbDb.ref('users_meta/' + user.uid + '/disabled').once('value').then(snap => {
+        if (snap.val() === true && !ADMIN_IDS.includes(lid)) {
+          alert('このアカウントは管理者により無効化されています。');
+          firebase.auth(fbApp).signOut();
+          return;
+        }
+        startUserSync(user.uid);
+      });
     } else {
       stopSync();
     }
@@ -589,22 +618,25 @@ function initFirebaseAuth() {
 
 function updateAuthUI() {
   const btn = document.getElementById('authBtn');
+  const adminBtn = document.getElementById('adminBtn');
   if (!btn) return;
   if (currentUser) {
-    const name = (currentUser.email || '').replace(/@uriba\.local$/, '');
+    const name = getLoginId(currentUser);
     btn.textContent = name;
     btn.style.color = 'var(--success)';
     btn.title = '同期中 — クリックでメニュー';
+    if (adminBtn) adminBtn.style.display = isAdmin() ? '' : 'none';
   } else {
     btn.textContent = 'ログイン';
     btn.style.color = '';
     btn.title = 'ログインしてクラウド同期';
+    if (adminBtn) adminBtn.style.display = 'none';
   }
 }
 
 function showLoginUI() {
   if (currentUser) {
-    if (confirm('「' + (currentUser.email || '').replace(/@uriba\.local$/, '') + '」でログイン中です。\nログアウトしますか？')) {
+    if (confirm('「' + getLoginId(currentUser) + '」でログイン中です。\nログアウトしますか？')) {
       firebase.auth(fbApp).signOut();
     }
     return;
@@ -638,7 +670,13 @@ function submitLogin() {
   const auth = firebase.auth(fbApp);
   if (loginMode === 'register') {
     auth.createUserWithEmailAndPassword(email, pw)
-      .then(() => { closeModal('loginModal'); })
+      .then(cred => {
+        fbDb.ref('users_meta/' + cred.user.uid).set({
+          loginId: id, registeredAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(), disabled: false
+        });
+        closeModal('loginModal');
+      })
       .catch(e => {
         if (e.code === 'auth/email-already-in-use') errEl.textContent = 'このIDは既に使われています';
         else errEl.textContent = '登録エラー: ' + e.message;
@@ -651,6 +689,38 @@ function submitLogin() {
         else errEl.textContent = 'ログインエラー: ' + e.message;
       });
   }
+}
+
+function showAdminPanel() {
+  if (!isAdmin() || !fbDb) return;
+  fbDb.ref('users_meta').once('value').then(snap => {
+    const users = snap.val() || {};
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+    html += '<tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">ID</th><th style="padding:6px">登録日</th><th style="padding:6px">最終利用</th><th style="padding:6px">状態</th></tr>';
+    Object.entries(users).forEach(([uid, u]) => {
+      const active = !u.disabled;
+      const regDate = u.registeredAt ? fmtDate(u.registeredAt) : '—';
+      const lastDate = u.lastActive ? fmtDate(u.lastActive) : '—';
+      const isAdm = ADMIN_IDS.includes(u.loginId);
+      html += `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px;font-weight:600">${esc(u.loginId || uid)}${isAdm ? ' (管理者)' : ''}</td>
+        <td style="padding:6px;text-align:center">${regDate}</td>
+        <td style="padding:6px;text-align:center">${lastDate}</td>
+        <td style="padding:6px;text-align:center">${isAdm ? '—' :
+          `<button class="btn ${active ? 'btn-outline' : 'btn-primary'}" style="font-size:11px;padding:2px 10px" onclick="toggleUserDisabled('${uid}',${active})">${active ? '無効化' : '有効化'}</button>`
+        }</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById('adminContent').innerHTML = html;
+    openModal('adminModal');
+  });
+}
+
+function toggleUserDisabled(uid, currentlyActive) {
+  if (!fbDb) return;
+  fbDb.ref('users_meta/' + uid + '/disabled').set(currentlyActive).then(() => {
+    showAdminPanel();
+  });
 }
 
 let fbRef = null, fbListener = null;
