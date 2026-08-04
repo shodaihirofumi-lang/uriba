@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4c6ef5"/>
+      <stop offset="100%" stop-color="#7950f2"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect width="512" height="256" rx="108" fill="url(#shine)"/>
+  <rect x="56" y="56" width="172" height="172" rx="18" fill="rgba(255,255,255,0.92)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+  <rect x="56" y="56" width="172" height="172" rx="18" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+  <rect x="248" y="56" width="208" height="76" rx="16" fill="rgba(255,255,255,0.72)"/>
+  <rect x="248" y="152" width="96" height="76" rx="14" fill="rgba(255,255,255,0.52)"/>
+  <rect x="360" y="152" width="96" height="76" rx="14" fill="rgba(255,255,255,0.62)"/>
+  <rect x="56" y="248" width="108" height="208" rx="16" fill="rgba(255,255,255,0.65)"/>
+  <rect x="184" y="248" width="272" height="92" rx="16" fill="rgba(255,255,255,0.82)"/>
+  <rect x="184" y="360" width="128" height="96" rx="14" fill="rgba(255,255,255,0.5)"/>
+  <rect x="328" y="360" width="128" height="96" rx="14" fill="rgba(255,255,255,0.7)"/>
+</svg>
