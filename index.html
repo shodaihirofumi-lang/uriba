@@ -1962,7 +1962,8 @@ function renderElevation() {
   if (elev.type === 'shelf') {
     if (!elev.rows || elev.rows.length === 0) elev.rows = [{ items: [] }];
     container.innerHTML = `<div class="shelf-view">
-      ${elev.rows.map((row, ri) => `<div class="shelf-row">
+      ${elev.rows.map((row, ri) => `<div class="shelf-row" style="position:relative">
+        ${elev.rows.length > 1 ? `<div style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:4" onclick="removeShelfRow(${ri})">×</div>` : ''}
         ${row.items.map((item, ii) => `<div class="shelf-item" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})">
           ${esc(item.label || '?')}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
           ${ii > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},-1)">◀</div>` : ''}
@@ -1987,6 +1988,13 @@ function renderElevation() {
 
 function addShelfRow() {
   editorState.tempElevation.rows.push({ items: [] });
+  renderElevation();
+}
+
+function removeShelfRow(rowIdx) {
+  const rows = editorState.tempElevation.rows;
+  if (rows.length <= 1) return;
+  rows.splice(rowIdx, 1);
   renderElevation();
 }
 
