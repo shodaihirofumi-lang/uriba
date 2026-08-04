@@ -501,7 +501,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 // ════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════
-const COLORS = ['#ffd8a8','#a5d8ff','#b2f2bb','#ffc9c9','#eebefa','#ffec99','#fcc2d7','#d0bfff','#99e9f2','#e9ecef'];
+const COLORS = ['#ffd8a8','#a5d8ff','#b2f2bb','#ffc9c9','#eebefa','#ffec99','#fcc2d7','#d0bfff','#99e9f2','#e9ecef','#ff8787','#74c0fc','#63e6be','#ffa94d','#da77f2','#e599f7','#38d9a9','#748ffc','#f06595','#ced4da','#ffd43b','#69db7c','#ff6b6b','#4dabf7','#845ef7'];
 const SIZE_MAP = { small: 1, medium: 2, large: 3 };
 
 let state = {
@@ -1662,17 +1662,30 @@ function saveFixture() {
   f.y = snap(parseInt(document.getElementById('fxY').value) || f.y, ly.gridSize);
   f.priority = document.getElementById('fxPriority').value;
   f.projectId = document.getElementById('fxProject').value;
-  f.color = getSelectedColor('fxColors') || f.color;
+  const pickedColor = getSelectedColor('fxColors') || f.color;
+  f.color = pickedColor;
 
   if (f.projectId) {
     const proj = ly.projects.find(p => p.id === f.projectId);
-    if (proj) { f.color = proj.color; f.sub = proj.name; }
+    if (proj) {
+      proj.color = pickedColor;
+      f.sub = proj.name;
+      syncProjectColorToFixtures(proj.id, proj.color);
+    }
   }
 
   closeModal('fixtureModal');
   renderFloor();
   saveState();
   showToast('保存しました');
+}
+
+function syncProjectColorToFixtures(projectId, color) {
+  const md = monthData();
+  if (!md) return;
+  md.fixtures.forEach(f => {
+    if (f.projectId === projectId) f.color = color;
+  });
 }
 
 // ════════════════════════════════════════
@@ -1760,12 +1773,16 @@ function saveProject() {
 
   if (editorState.editingProjectId) {
     const proj = ly.projects.find(p => p.id === editorState.editingProjectId);
-    if (proj) Object.assign(proj, data);
+    if (proj) {
+      Object.assign(proj, data);
+      syncProjectColorToFixtures(proj.id, proj.color);
+    }
   } else {
     ly.projects.push({ id: uid(), ...data });
   }
   closeModal('projectModal');
   renderProjects();
+  renderFloor();
   updateSliderLabel();
   saveState();
 }
