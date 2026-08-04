@@ -205,7 +205,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   .suggest-box { margin: 6px 8px; padding: 6px; }
   .modal { width: 95vw !important; max-height: 85vh; }
   .elev-editor { min-width: auto; }
-  .fixture .elev-btn { display: block !important; font-size: 9px; padding: 2px 6px; }
+  .fixture.selected .elev-btn { display: block !important; font-size: 9px; padding: 2px 6px; }
   .fixture .resize-handle { width: 16px; height: 16px; right: -8px; bottom: -8px; }
   .fixture.selected .resize-handle { display: block !important; }
   .shelf-item .del-x, .hook-item .del-x { display: flex !important; }
@@ -214,6 +214,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 
 /* print */
 @media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
   body { overflow: visible; height: auto; }
   #gallery, .editor-topbar, .toolbar, .slider-bar, .tab-bar, .side-panel, .modal-overlay { display: none !important; }
   #editor { display: flex !important; }
