@@ -301,7 +301,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <div class="side-panel" id="sidePanel">
       <div class="panel-toggle" onclick="document.getElementById('sidePanel').classList.toggle('collapsed')">▼ 企画パネル</div>
       <div class="panel-section">
-        <h4>企画リスト <button onclick="showProjectModal()">＋</button> <button onclick="showPasteModal()" style="font-size:11px;padding:2px 8px;background:var(--primary-light);color:var(--primary);border-radius:4px;font-weight:600">貼付</button></h4>
+        <h4>企画リスト <button onclick="showProjectModal()">＋</button> <button onclick="showPasteModal()" style="font-size:11px;padding:2px 8px;background:var(--primary-light);color:var(--primary);border-radius:4px;font-weight:600">貼付</button> <button onclick="bulkDeleteDaiso()" style="font-size:11px;padding:2px 8px;background:#fff0f0;color:var(--danger);border-radius:4px;font-weight:600">一括取消</button></h4>
       </div>
       <div class="project-list" id="projectList"></div>
       <div class="suggest-box">
@@ -1699,27 +1699,65 @@ function previewDaisoPaste() {
     </div>`).join('');
 }
 
+function parseTsvWithQuotes(text) {
+  const rows = [];
+  let row = [], cell = '', inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else { cell += ch; }
+    } else {
+      if (ch === '"') { inQuote = true; }
+      else if (ch === '\t') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        if (ch === '\r') i++;
+        row.push(cell); cell = '';
+        if (row.some(c => c.trim())) rows.push(row);
+        row = [];
+      } else { cell += ch; }
+    }
+  }
+  row.push(cell);
+  if (row.some(c => c.trim())) rows.push(row);
+  return rows;
+}
+
 function parseDaisoRows(text) {
-  const lines = text.trim().split('\n').filter(l => l.trim());
+  const rows = parseTsvWithQuotes(text);
   const results = [];
-  for (const line of lines) {
-    const cols = line.split('\t');
+  for (const cols of rows) {
     if (cols.length < 3) continue;
-    let name = '', arrivalInfo = '', deployStart = '', itemCount = 0;
     const c0 = cols[0].trim();
     const isNumbered = /^\d+$/.test(c0);
-    if (isNumbered && cols.length >= 6) {
-      name = cols[1].trim();
-      arrivalInfo = (cols[4] || cols[3] || '').trim();
+    let nameIdx = isNumbered ? 1 : 0;
+    let name = (cols[nameIdx] || '').trim();
+    if (!name || /^オーダー商品|^年度/.test(name) || /^【/.test(name)) continue;
+
+    let arrivalInfo = '', deployStart = '', itemCount = 0;
+    if (isNumbered) {
+      arrivalInfo = (cols[4] || '').trim() || (cols[3] || '').trim();
       deployStart = (cols[5] || '').trim();
-      itemCount = parseInt(cols[7]) || 0;
-    } else if (!isNumbered) {
-      name = c0;
+      for (let i = cols.length - 1; i >= 6; i--) {
+        const v = parseInt(cols[i]);
+        if (v > 0) { itemCount = v; break; }
+      }
+      if (!itemCount) {
+        const itemStr = (cols[7] || cols[6] || '').trim();
+        const m = itemStr.match(/(\d+)/);
+        if (m) itemCount = parseInt(m[1]);
+      }
+    } else {
       arrivalInfo = (cols[3] || cols[2] || '').trim();
       deployStart = (cols[4] || '').trim();
-      itemCount = parseInt(cols[6]) || parseInt(cols[5]) || 0;
+      for (let i = cols.length - 1; i >= 4; i--) {
+        const v = parseInt(cols[i]);
+        if (v > 0) { itemCount = v; break; }
+      }
     }
-    if (!name || /^オーダー商品/.test(name)) continue;
+    arrivalInfo = arrivalInfo.replace(/\s+/g, ' ').replace(/　/g, ' ').trim();
+    deployStart = deployStart.replace(/\s+/g, ' ').replace(/　/g, ' ').trim();
     results.push({ name, arrivalInfo, deployStart, itemCount });
   }
   return results;
@@ -1750,6 +1788,18 @@ function importDaisoOrders() {
   renderProjects();
   saveState();
   showToast(rows.length + '件の企画を追加しました');
+}
+
+function bulkDeleteDaiso() {
+  const ly = currentLayout();
+  if (!ly) return;
+  const count = ly.projects.filter(p => p.category === 'ダイソー事前オーダー').length;
+  if (count === 0) { alert('ダイソー事前オーダーの企画はありません'); return; }
+  if (!confirm('ダイソー事前オーダーの企画 ' + count + '件をすべて削除しますか？')) return;
+  ly.projects = ly.projects.filter(p => p.category !== 'ダイソー事前オーダー');
+  renderProjects();
+  saveState();
+  showToast(count + '件を削除しました');
 }
 
 // ════════════════════════════════════════
