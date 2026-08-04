@@ -205,6 +205,8 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   .fixture .elev-btn, .fixture .resize-handle { display: none !important; }
 }
 </style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -224,6 +226,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <input class="gallery-filter" type="text" placeholder="店舗名・レイアウト名で絞り込み..." id="galleryFilter">
     <span style="flex:1"></span>
     <button class="btn btn-outline" onclick="importLayout()">取り込み</button>
+    <button class="btn btn-outline" onclick="showSyncModal()" id="syncBtn" title="クラウド同期">☁</button>
     <button class="btn btn-primary" onclick="showNewLayoutModal()">＋ 新規レイアウト</button>
   </div>
   <div id="galleryContent" class="gallery-grid"></div>
@@ -413,6 +416,29 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   </div>
 </div>
 
+<!-- Cloud Sync Modal -->
+<div class="modal-overlay" id="syncModal">
+  <div class="modal" style="width:440px">
+    <div class="modal-header"><h3>クラウド同期設定</h3><button class="modal-close" onclick="closeModal('syncModal')">&times;</button></div>
+    <div class="modal-body">
+      <div id="syncStatus" style="margin-bottom:12px"></div>
+      <div id="syncSetupArea">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Firebase Realtime Databaseで端末間の自動同期を行います。<br>
+        <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--primary)">Firebase Console</a> でプロジェクトを作成し、設定値を貼り付けてください。</p>
+        <div class="form-group"><label>API Key</label><input id="fbApiKey" placeholder="AIza..."></div>
+        <div class="form-group"><label>Auth Domain</label><input id="fbAuthDomain" placeholder="your-project.firebaseapp.com"></div>
+        <div class="form-group"><label>Database URL</label><input id="fbDbUrl" placeholder="https://your-project-default-rtdb.firebaseio.com"></div>
+        <div class="form-group"><label>Project ID</label><input id="fbProjectId" placeholder="your-project"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-outline" id="syncDisconnectBtn" style="display:none;margin-right:auto" onclick="disconnectSync()">同期解除</button>
+        <button class="btn btn-outline" onclick="closeModal('syncModal')">閉じる</button>
+        <button class="btn btn-primary" id="syncConnectBtn" onclick="connectSync()">接続</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════
 // STATE
@@ -489,8 +515,17 @@ function fmtMonth(d) {
 // ════════════════════════════════════════
 // PERSISTENCE
 // ════════════════════════════════════════
+let fbApp = null, fbDb = null, fbRef = null, fbListener = null;
+let cloudSyncing = false;
+let ignoreNextFbUpdate = false;
+
 function saveState() {
+  const ly = currentLayout();
+  if (ly) ly.updatedAt = new Date().toISOString();
   try { localStorage.setItem('uriba_state', JSON.stringify(state)); } catch(e) {}
+  if (cloudSyncing && fbRef && !ignoreNextFbUpdate) {
+    fbRef.set(JSON.parse(JSON.stringify(state.layouts))).catch(e => console.warn('sync write error', e));
+  }
 }
 function loadState() {
   try {
@@ -530,6 +565,138 @@ function importLayout() {
     reader.readAsText(file);
   };
   input.click();
+}
+
+// ════════════════════════════════════════
+// CLOUD SYNC (Firebase)
+// ════════════════════════════════════════
+function getSyncConfig() {
+  try {
+    const s = localStorage.getItem('uriba_fb_config');
+    return s ? JSON.parse(s) : null;
+  } catch(e) { return null; }
+}
+function saveSyncConfig(cfg) {
+  localStorage.setItem('uriba_fb_config', JSON.stringify(cfg));
+}
+function clearSyncConfig() {
+  localStorage.removeItem('uriba_fb_config');
+}
+
+function showSyncModal() {
+  const cfg = getSyncConfig();
+  const area = document.getElementById('syncSetupArea');
+  const statusEl = document.getElementById('syncStatus');
+  const disconnBtn = document.getElementById('syncDisconnectBtn');
+  const connBtn = document.getElementById('syncConnectBtn');
+  if (cloudSyncing && cfg) {
+    statusEl.innerHTML = '<span style="color:var(--success);font-weight:600">● 同期中</span>';
+    document.getElementById('fbApiKey').value = cfg.apiKey || '';
+    document.getElementById('fbAuthDomain').value = cfg.authDomain || '';
+    document.getElementById('fbDbUrl').value = cfg.databaseURL || '';
+    document.getElementById('fbProjectId').value = cfg.projectId || '';
+    disconnBtn.style.display = '';
+    connBtn.textContent = '再接続';
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--text3)">● 未接続</span>';
+    if (cfg) {
+      document.getElementById('fbApiKey').value = cfg.apiKey || '';
+      document.getElementById('fbAuthDomain').value = cfg.authDomain || '';
+      document.getElementById('fbDbUrl').value = cfg.databaseURL || '';
+      document.getElementById('fbProjectId').value = cfg.projectId || '';
+    }
+    disconnBtn.style.display = 'none';
+    connBtn.textContent = '接続';
+  }
+  openModal('syncModal');
+}
+
+function connectSync() {
+  const cfg = {
+    apiKey: document.getElementById('fbApiKey').value.trim(),
+    authDomain: document.getElementById('fbAuthDomain').value.trim(),
+    databaseURL: document.getElementById('fbDbUrl').value.trim(),
+    projectId: document.getElementById('fbProjectId').value.trim()
+  };
+  if (!cfg.apiKey || !cfg.databaseURL || !cfg.projectId) {
+    alert('API Key、Database URL、Project ID は必須です');
+    return;
+  }
+  saveSyncConfig(cfg);
+  startSync(cfg);
+  closeModal('syncModal');
+}
+
+function disconnectSync() {
+  stopSync();
+  clearSyncConfig();
+  updateSyncIndicator(false);
+  closeModal('syncModal');
+}
+
+function startSync(cfg) {
+  try {
+    stopSync();
+    if (!firebase || !firebase.app) return;
+    try { fbApp = firebase.app(); } catch(e) { fbApp = firebase.initializeApp(cfg); }
+    fbDb = firebase.database(fbApp);
+    fbRef = fbDb.ref('uriba/layouts');
+    fbRef.set(JSON.parse(JSON.stringify(state.layouts)));
+    fbListener = fbRef.on('value', snap => {
+      if (ignoreNextFbUpdate) { ignoreNextFbUpdate = false; return; }
+      const remote = snap.val();
+      if (!remote) return;
+      const remoteLayouts = Array.isArray(remote) ? remote : Object.values(remote);
+      mergeLayouts(remoteLayouts);
+    });
+    cloudSyncing = true;
+    updateSyncIndicator(true);
+  } catch(e) {
+    alert('Firebase接続エラー: ' + e.message);
+    cloudSyncing = false;
+    updateSyncIndicator(false);
+  }
+}
+
+function stopSync() {
+  if (fbRef && fbListener) {
+    fbRef.off('value', fbListener);
+    fbListener = null;
+  }
+  cloudSyncing = false;
+}
+
+function mergeLayouts(remoteLayouts) {
+  const localById = {};
+  state.layouts.forEach(l => { localById[l.id] = l; });
+  const merged = [];
+  const seen = {};
+  remoteLayouts.forEach(rl => {
+    if (!rl || !rl.id) return;
+    seen[rl.id] = true;
+    const local = localById[rl.id];
+    if (!local) {
+      merged.push(rl);
+    } else {
+      const rt = new Date(rl.updatedAt || 0).getTime();
+      const lt = new Date(local.updatedAt || 0).getTime();
+      merged.push(rt > lt ? rl : local);
+    }
+  });
+  state.layouts.forEach(l => {
+    if (!seen[l.id]) merged.push(l);
+  });
+  state.layouts = merged;
+  try { localStorage.setItem('uriba_state', JSON.stringify(state)); } catch(e) {}
+  if (state.view === 'gallery') renderGallery();
+}
+
+function updateSyncIndicator(on) {
+  const btn = document.getElementById('syncBtn');
+  if (btn) {
+    btn.style.color = on ? 'var(--success)' : '';
+    btn.title = on ? 'クラウド同期中' : 'クラウド同期';
+  }
 }
 
 // ════════════════════════════════════════
@@ -1496,6 +1663,14 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 loadState();
 renderGallery();
 document.getElementById('galleryFilter').addEventListener('input', renderGallery);
+
+// auto-reconnect cloud sync
+(function() {
+  const cfg = getSyncConfig();
+  if (cfg && cfg.apiKey && cfg.databaseURL) {
+    setTimeout(() => startSync(cfg), 500);
+  }
+})();
 
 // auto-save every 10s
 setInterval(() => { if (state.view === 'editor') saveState(); }, 10000);
