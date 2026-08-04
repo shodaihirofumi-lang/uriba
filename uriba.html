@@ -311,6 +311,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
           <div class="suggest-pat" onclick="suggest('size')">大型優先</div>
           <div class="suggest-pat" onclick="suggest('category')">カテゴリ集約</div>
         </div>
+        <button onclick="undoAction()" style="margin-top:8px;width:100%;padding:8px;background:var(--surface);border:2px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">↩ 元に戻す</button>
       </div>
     </div>
   </div>
@@ -1986,7 +1987,7 @@ function suggest(mode) {
   renderFloor();
   renderProjects();
   saveState();
-  alert('配置を提案しました。気に入らなければ「元に戻す」で戻せます。');
+  showToast('配置を提案しました');
 }
 
 // auto-assign location priority based on distance to entrance/register
