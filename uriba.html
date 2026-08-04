@@ -357,7 +357,10 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <div class="modal-body">
       <div class="form-group"><label>ラベル</label><input id="fxLabel" placeholder="例：B1-B3"></div>
       <div class="form-group"><label>陳列内容</label><input id="fxContents" placeholder="例：ハロウィン装飾・お菓子"></div>
-      <div class="form-group"><label>カテゴリー名</label><input id="fxCategory" placeholder="例：季節催事"></div>
+      <div class="form-group"><label>カテゴリー名</label>
+        <select id="fxCategorySel" onchange="onFxCategorySelect()" style="margin-bottom:4px"><option value="">（自由入力）</option></select>
+        <input id="fxCategory" placeholder="例：季節催事">
+      </div>
       <div class="form-group"><label>色</label>
         <div class="color-options" id="fxColors"></div>
       </div>
@@ -1652,7 +1655,7 @@ function showFixtureModal(fxId) {
   editorState.editingFixtureId = fxId;
   document.getElementById('fxLabel').value = f.label || '';
   document.getElementById('fxContents').value = f.contents || '';
-  document.getElementById('fxCategory').value = f.category || '';
+  populateFxCategorySelect(f.category || '');
   document.getElementById('fxW').value = f.w;
   document.getElementById('fxH').value = f.h;
   document.getElementById('fxX').value = f.x;
@@ -1666,6 +1669,42 @@ function showFixtureModal(fxId) {
   sel.innerHTML = '<option value="">(なし)</option>' + ly.projects.map(p => `<option value="${p.id}" ${p.id===f.projectId?'selected':''}>${esc(p.name)}</option>`).join('');
 
   openModal('fixtureModal');
+}
+
+function populateFxCategorySelect(currentVal) {
+  const ly = currentLayout();
+  const cats = new Set();
+  ly.projects.forEach(p => {
+    const arr = Array.isArray(p.category) ? p.category : (p.category ? [p.category] : []);
+    arr.forEach(c => cats.add(c));
+  });
+  const sel = document.getElementById('fxCategorySel');
+  const inp = document.getElementById('fxCategory');
+  sel.innerHTML = '<option value="">(自由入力)</option>' +
+    [...cats].map(c => `<option value="${esc(c)}" ${c === currentVal ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  if (cats.has(currentVal)) {
+    sel.value = currentVal;
+    inp.value = currentVal;
+    inp.style.display = 'none';
+  } else {
+    sel.value = '';
+    inp.value = currentVal;
+    inp.style.display = '';
+  }
+  sel.style.display = cats.size > 0 ? '' : 'none';
+}
+
+function onFxCategorySelect() {
+  const sel = document.getElementById('fxCategorySel');
+  const inp = document.getElementById('fxCategory');
+  if (sel.value) {
+    inp.value = sel.value;
+    inp.style.display = 'none';
+  } else {
+    inp.value = '';
+    inp.style.display = '';
+    inp.focus();
+  }
 }
 
 function saveFixture() {
