@@ -301,7 +301,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <div class="side-panel" id="sidePanel">
       <div class="panel-toggle" onclick="document.getElementById('sidePanel').classList.toggle('collapsed')">▼ 企画パネル</div>
       <div class="panel-section">
-        <h4>企画リスト <button onclick="showProjectModal()">＋</button></h4>
+        <h4>企画リスト <button onclick="showProjectModal()">＋</button> <button onclick="showPasteModal()" style="font-size:11px;padding:2px 8px;background:var(--primary-light);color:var(--primary);border-radius:4px;font-weight:600">貼付</button></h4>
       </div>
       <div class="project-list" id="projectList"></div>
       <div class="suggest-box">
@@ -385,6 +385,8 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
         <div class="form-group"><label>アイテム数</label><input id="pjItems" type="number" placeholder="例：508"></div>
         <div class="form-group"><label>売上（優先度）</label><input id="pjSales" type="number" placeholder="例：100"></div>
       </div>
+      <div class="form-group"><label>入荷時期</label><input id="pjArrival" placeholder="例：2026年10月中旬より"></div>
+      <div class="form-group"><label>展開時期</label><input id="pjDeploy" placeholder="例：2026年11月上旬～"></div>
       <div class="form-group"><label>サイズ</label>
         <select id="pjSize"><option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option></select>
       </div>
@@ -430,6 +432,22 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="btn btn-outline" onclick="closeModal('itemModal')">キャンセル</button>
         <button class="btn btn-primary" onclick="saveItem()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Paste Modal (Daiso) -->
+<div class="modal-overlay" id="pasteModal">
+  <div class="modal" style="width:500px">
+    <div class="modal-header"><h3>ダイソーオーダー表を貼り付け</h3><button class="modal-close" onclick="closeModal('pasteModal')">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Excelの行をコピーして下に貼り付けてください（複数行OK）</p>
+      <textarea id="pasteArea" rows="8" style="width:100%;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical" placeholder="Excelからコピーした行をここに貼り付け"></textarea>
+      <div id="pastePreview" style="margin-top:8px;font-size:12px;max-height:200px;overflow-y:auto"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button class="btn btn-outline" onclick="closeModal('pasteModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="importDaisoOrders()">企画に追加</button>
       </div>
     </div>
   </div>
@@ -1601,6 +1619,8 @@ function renderProjects() {
       <div class="project-info">
         <b>${esc(p.name)}</b>
         <span>${p.startDate ? fmtDate(p.startDate) : '?'} 〜 ${p.endDate ? fmtDate(p.endDate) : '?'} / ${p.itemCount || 0}点${p.sales ? ' / 売上' + p.sales : ''}</span>
+        ${p.arrivalInfo ? `<span style="font-size:10px;color:var(--text3)">入荷: ${esc(p.arrivalInfo)}</span>` : ''}
+        ${p.deployStart ? `<span style="font-size:10px;color:var(--text3)">展開: ${esc(p.deployStart)}</span>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1619,6 +1639,8 @@ function showProjectModal(id) {
   document.getElementById('pjEnd').value = proj ? proj.endDate : '';
   document.getElementById('pjItems').value = proj ? proj.itemCount : '';
   document.getElementById('pjSales').value = proj ? proj.sales : '';
+  document.getElementById('pjArrival').value = proj ? (proj.arrivalInfo || '') : '';
+  document.getElementById('pjDeploy').value = proj ? (proj.deployStart || '') : '';
   document.getElementById('pjSize').value = proj ? proj.size : 'medium';
   renderColorPicker('pjColors', proj ? proj.color : COLORS[0]);
   openModal('projectModal');
@@ -1634,6 +1656,8 @@ function saveProject() {
     endDate: document.getElementById('pjEnd').value,
     itemCount: parseInt(document.getElementById('pjItems').value) || 0,
     sales: parseInt(document.getElementById('pjSales').value) || 0,
+    arrivalInfo: document.getElementById('pjArrival').value.trim(),
+    deployStart: document.getElementById('pjDeploy').value.trim(),
     size: document.getElementById('pjSize').value
   };
 
@@ -1656,6 +1680,76 @@ function deleteProject() {
   closeModal('projectModal');
   renderProjects();
   saveState();
+}
+
+function showPasteModal() {
+  document.getElementById('pasteArea').value = '';
+  document.getElementById('pastePreview').innerHTML = '';
+  openModal('pasteModal');
+  document.getElementById('pasteArea').addEventListener('input', previewDaisoPaste);
+}
+
+function previewDaisoPaste() {
+  const rows = parseDaisoRows(document.getElementById('pasteArea').value);
+  const pre = document.getElementById('pastePreview');
+  if (rows.length === 0) { pre.innerHTML = ''; return; }
+  pre.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${rows.length}件検出:</div>` +
+    rows.map(r => `<div style="padding:2px 0;border-bottom:1px solid var(--border);font-size:11px">
+      <b>${esc(r.name)}</b> / ${r.itemCount}点 / 入荷:${esc(r.arrivalInfo)} / 展開:${esc(r.deployStart)}
+    </div>`).join('');
+}
+
+function parseDaisoRows(text) {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  const results = [];
+  for (const line of lines) {
+    const cols = line.split('\t');
+    if (cols.length < 3) continue;
+    let name = '', arrivalInfo = '', deployStart = '', itemCount = 0;
+    const c0 = cols[0].trim();
+    const isNumbered = /^\d+$/.test(c0);
+    if (isNumbered && cols.length >= 6) {
+      name = cols[1].trim();
+      arrivalInfo = (cols[4] || cols[3] || '').trim();
+      deployStart = (cols[5] || '').trim();
+      itemCount = parseInt(cols[7]) || 0;
+    } else if (!isNumbered) {
+      name = c0;
+      arrivalInfo = (cols[3] || cols[2] || '').trim();
+      deployStart = (cols[4] || '').trim();
+      itemCount = parseInt(cols[6]) || parseInt(cols[5]) || 0;
+    }
+    if (!name || /^オーダー商品/.test(name)) continue;
+    results.push({ name, arrivalInfo, deployStart, itemCount });
+  }
+  return results;
+}
+
+function importDaisoOrders() {
+  const ly = currentLayout();
+  if (!ly) return;
+  const rows = parseDaisoRows(document.getElementById('pasteArea').value);
+  if (rows.length === 0) { alert('貼り付けデータが認識できません'); return; }
+  const colorIdx = ly.projects.length;
+  rows.forEach((r, i) => {
+    ly.projects.push({
+      id: uid(),
+      name: r.name,
+      category: 'ダイソー事前オーダー',
+      color: COLORS[(colorIdx + i) % COLORS.length],
+      startDate: '',
+      endDate: '',
+      itemCount: r.itemCount,
+      sales: 0,
+      arrivalInfo: r.arrivalInfo,
+      deployStart: r.deployStart,
+      size: 'medium'
+    });
+  });
+  closeModal('pasteModal');
+  renderProjects();
+  saveState();
+  showToast(rows.length + '件の企画を追加しました');
 }
 
 // ════════════════════════════════════════
