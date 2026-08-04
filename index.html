@@ -108,8 +108,8 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .anno-register { width: 40px; height: 40px; background: #f76707; }
 .anno-pillar { width: 24px; height: 24px; background: #868e96; border-radius: 4px; }
 .anno-arrow { pointer-events: auto; cursor: move; }
-.anno-arrow line { stroke: #339af0; stroke-width: 2; marker-end: url(#arrowhead); }
-.anno-arrow.selected line:last-child { stroke: var(--primary); stroke-width: 3; }
+.anno-arrow line { stroke: #339af0; stroke-width: 1.5; marker-end: url(#arrowhead); }
+.anno-arrow.selected line:last-child { stroke: var(--primary); stroke-width: 2; }
 .anno-entrance.selected, .anno-register.selected, .anno-pillar.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* side panel */
@@ -224,6 +224,8 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   .canvas-wrap { overflow: visible !important; }
   .floor { margin: 0 !important; box-shadow: none !important; page-break-after: always; }
   .fixture .elev-btn, .fixture .resize-handle { display: none !important; }
+  .anno-del-btn { display: none !important; }
+  .fixture, .anno-entrance, .anno-register, .anno-pillar { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -235,8 +237,8 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 <!-- SVG defs for arrow markers -->
 <svg width="0" height="0" style="position:absolute">
   <defs>
-    <marker id="arrowhead" markerWidth="6" markerHeight="5" refX="5.5" refY="2.5" orient="auto">
-      <polygon points="0 0, 6 2.5, 0 5" fill="#339af0" />
+    <marker id="arrowhead" markerWidth="5" markerHeight="4" refX="4.5" refY="2" orient="auto">
+      <polygon points="0 0, 5 2, 0 4" fill="#339af0" />
     </marker>
   </defs>
 </svg>
@@ -1148,10 +1150,26 @@ function renderFloor() {
       svg.style.width = '100%'; svg.style.height = '100%';
       svg.style.pointerEvents = 'none';
       svg.innerHTML = `<line x1="${a.x1}" y1="${a.y1}" x2="${a.x2}" y2="${a.y2}" style="pointer-events:stroke;stroke-width:12;stroke:transparent;cursor:pointer" /><line x1="${a.x1}" y1="${a.y1}" x2="${a.x2}" y2="${a.y2}" style="pointer-events:none" />`;
-      const arrowSelect = e => { e.stopPropagation(); e.preventDefault(); editorState.selectedAnnoId = a.id; editorState.selectedFixtureId = null; renderFloor(); };
+      const arrowSelect = e => {
+        e.stopPropagation(); e.preventDefault();
+        editorState.selectedAnnoId = a.id; editorState.selectedFixtureId = null;
+        renderFloor();
+        startArrowDrag(e, a);
+      };
       svg.querySelector('line').addEventListener('mousedown', arrowSelect);
       svg.querySelector('line').addEventListener('touchstart', arrowSelect, { passive: false });
       floor.appendChild(svg);
+      if (sel) {
+        const cx = (a.x1 + a.x2) / 2, cy = (a.y1 + a.y2) / 2;
+        const delBtn = document.createElement('button');
+        delBtn.className = 'anno-del-btn';
+        delBtn.textContent = '×';
+        delBtn.style.cssText = 'position:absolute;left:' + (cx - 10) + 'px;top:' + (cy - 10) + 'px;width:20px;height:20px;background:var(--danger);color:#fff;border:none;border-radius:50%;font-size:14px;line-height:20px;text-align:center;cursor:pointer;z-index:20;padding:0';
+        delBtn.addEventListener('mousedown', e => { e.stopPropagation(); });
+        delBtn.addEventListener('click', e => { e.stopPropagation(); deleteSelected(); });
+        delBtn.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); deleteSelected(); }, { passive: false });
+        floor.appendChild(delBtn);
+      }
     } else {
       const div = document.createElement('div');
       div.id = 'anno_' + a.id;
@@ -1170,6 +1188,15 @@ function renderFloor() {
       div.addEventListener('mousedown', annoHandler);
       div.addEventListener('touchstart', annoHandler, { passive: false });
       floor.appendChild(div);
+      if (a.id === editorState.selectedAnnoId) {
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '×';
+        delBtn.style.cssText = 'position:absolute;left:' + (a.x + 10) + 'px;top:' + (a.y - 30) + 'px;width:20px;height:20px;background:var(--danger);color:#fff;border:none;border-radius:50%;font-size:14px;line-height:20px;text-align:center;cursor:pointer;z-index:20;padding:0';
+        delBtn.addEventListener('mousedown', e => { e.stopPropagation(); });
+        delBtn.addEventListener('click', e => { e.stopPropagation(); deleteSelected(); });
+        delBtn.addEventListener('touchstart', e => { e.stopPropagation(); e.preventDefault(); deleteSelected(); }, { passive: false });
+        floor.appendChild(delBtn);
+      }
     }
   });
 
@@ -1439,6 +1466,34 @@ function startResize(e, fixture) {
     fixture.h = snap(Math.max(ly.gridSize, origH + dh), ly.gridSize);
     const el = document.getElementById('fx_' + fixture.id);
     if (el) { el.style.width = fixture.w + 'px'; el.style.height = fixture.h + 'px'; }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    saveState();
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onUp);
+}
+
+function startArrowDrag(e, arrow) {
+  if (editorState.tool !== 'select') return;
+  e.preventDefault();
+  const ly = currentLayout();
+  const p0 = pointerXY(e);
+  const startX = p0.clientX, startY = p0.clientY;
+  const ox1 = arrow.x1, oy1 = arrow.y1, ox2 = arrow.x2, oy2 = arrow.y2;
+  function onMove(ev) {
+    ev.preventDefault();
+    const p = pointerXY(ev);
+    const dx = (p.clientX - startX) / floorZoom, dy = (p.clientY - startY) / floorZoom;
+    arrow.x1 = snap(ox1 + dx, ly.gridSize); arrow.y1 = snap(oy1 + dy, ly.gridSize);
+    arrow.x2 = snap(ox2 + dx, ly.gridSize); arrow.y2 = snap(oy2 + dy, ly.gridSize);
+    renderFloor();
   }
   function onUp() {
     document.removeEventListener('mousemove', onMove);
