@@ -1272,27 +1272,35 @@ document.getElementById('floor').addEventListener('touchstart', handleFloorDown,
 function startFixtureDrag(e, fixture) {
   if (editorState.tool !== 'select') return;
   if (e.target.classList.contains('elev-btn')) return;
+  if (e.target.classList.contains('move-btn')) return;
+  if (e.target.classList.contains('del-x')) return;
   e.preventDefault();
-  const wasSelected = editorState.selectedFixtureId === fixture.id;
   editorState.selectedFixtureId = fixture.id;
   editorState.selectedAnnoId = null;
   renderFloor();
 
+  const isTouch = !!(e.touches || e.changedTouches);
+
+  if (isTouch) {
+    startTouchFixtureDrag(e, fixture);
+  } else {
+    startMouseFixtureDrag(e, fixture);
+  }
+}
+
+function startMouseFixtureDrag(e, fixture) {
   const ly = currentLayout();
   const p0 = pointerXY(e);
   const startX = p0.clientX, startY = p0.clientY;
   const origX = fixture.x, origY = fixture.y;
   let dragged = false;
-  const isTouch = !!(e.touches || e.changedTouches);
-  const dragThreshold = isTouch ? 12 : 4;
   pushUndo();
 
   function onMove(ev) {
-    ev.preventDefault();
     const p = pointerXY(ev);
     const dx = (p.clientX - startX) / floorZoom;
     const dy = (p.clientY - startY) / floorZoom;
-    if (!dragged && Math.abs(dx) < dragThreshold && Math.abs(dy) < dragThreshold) return;
+    if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
     dragged = true;
     fixture.x = snap(clamp(origX + dx, 0, ly.floorWidth - fixture.w), ly.gridSize);
     fixture.y = snap(clamp(origY + dy, 0, ly.floorHeight - fixture.h), ly.gridSize);
@@ -1302,17 +1310,64 @@ function startFixtureDrag(e, fixture) {
   function onUp() {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onUp);
-    if (!dragged) {
-      showFixtureModal(fixture.id);
-    }
+    if (!dragged) showFixtureModal(fixture.id);
     saveState();
   }
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', onUp);
+}
+
+function startTouchFixtureDrag(e, fixture) {
+  const ly = currentLayout();
+  const p0 = pointerXY(e);
+  const startX = p0.clientX, startY = p0.clientY;
+  const origX = fixture.x, origY = fixture.y;
+  let dragActive = false;
+  let cancelled = false;
+  const el = document.getElementById('fx_' + fixture.id);
+
+  const holdTimer = setTimeout(() => {
+    if (cancelled) return;
+    dragActive = true;
+    pushUndo();
+    if (el) el.style.boxShadow = '0 4px 16px rgba(0,0,0,.35)';
+    if (navigator.vibrate) navigator.vibrate(30);
+  }, 350);
+
+  function onMove(ev) {
+    const p = pointerXY(ev);
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+    if (!dragActive) {
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        clearTimeout(holdTimer);
+        cancelled = true;
+        cleanup();
+      }
+      return;
+    }
+    ev.preventDefault();
+    fixture.x = snap(clamp(origX + (dx / floorZoom), 0, ly.floorWidth - fixture.w), ly.gridSize);
+    fixture.y = snap(clamp(origY + (dy / floorZoom), 0, ly.floorHeight - fixture.h), ly.gridSize);
+    if (el) { el.style.left = fixture.x + 'px'; el.style.top = fixture.y + 'px'; }
+  }
+  function onUp() {
+    clearTimeout(holdTimer);
+    cleanup();
+    if (!dragActive && !cancelled) {
+      showFixtureModal(fixture.id);
+    }
+    if (el) el.style.boxShadow = '';
+    if (dragActive) saveState();
+  }
+  function cleanup() {
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    document.removeEventListener('touchcancel', onUp);
+  }
   document.addEventListener('touchmove', onMove, { passive: false });
   document.addEventListener('touchend', onUp);
+  document.addEventListener('touchcancel', onUp);
 }
 
 function startResize(e, fixture) {
