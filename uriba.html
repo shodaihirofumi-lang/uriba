@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>URIBA — 売り場レイアウト計画</title>
+<style>
+:root {
+  --bg: #f8f9fa; --surface: #fff; --border: #dee2e6; --text: #212529; --text2: #495057; --text3: #868e96;
+  --primary: #4c6ef5; --primary-light: #edf2ff; --danger: #e03131; --success: #37b24d;
+  --toolbar-bg: #212529; --toolbar-text: #f8f9fa;
+  --grid-dot: #e8e8e8; --grid-size: 20px;
+  --shadow: 0 1px 3px rgba(0,0,0,.1);
+  --radius: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Segoe UI","Meiryo","Hiragino Sans",sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; font-size: 13px; }
+input, select, textarea { font-family: inherit; font-size: 13px; }
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: .15s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #3b5bdb; }
+.btn-ghost { background: #495057; color: #fff; }
+.btn-ghost:hover { background: #343a40; }
+.btn-outline { border: 1px solid var(--border); background: var(--surface); color: var(--text2); }
+.btn-outline:hover { background: #f1f3f5; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* ── GALLERY ── */
+#gallery { flex: 1; overflow-y: auto; display: none; flex-direction: column; }
+#gallery.active { display: flex; }
+.gallery-header { padding: 24px 32px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.gallery-header h1 { font-size: 22px; font-weight: 700; }
+.gallery-filter { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); min-width: 200px; }
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; padding: 0 32px 32px; }
+.gallery-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: .2s; position: relative; }
+.gallery-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); transform: translateY(-2px); }
+.card-thumb { height: 140px; background: #f1f3f5; overflow: hidden; position: relative; }
+.card-thumb canvas { width: 100%; height: 100%; }
+.card-body { padding: 12px; }
+.card-body h3 { font-size: 14px; margin-bottom: 4px; }
+.card-body .meta { font-size: 11px; color: var(--text3); }
+.card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: .15s; }
+.gallery-card:hover .card-actions { opacity: 1; }
+.card-actions button { background: rgba(0,0,0,.6); color: #fff; border-radius: 4px; padding: 3px 7px; font-size: 11px; }
+.empty-state { text-align: center; padding: 80px 20px; color: var(--text3); }
+.empty-state h2 { font-size: 18px; margin-bottom: 8px; color: var(--text2); }
+
+/* ── EDITOR ── */
+#editor { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+#editor.active { display: flex; }
+.editor-topbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--toolbar-bg); color: var(--toolbar-text); flex-shrink: 0; }
+.editor-topbar .logo { font-weight: 700; font-size: 14px; cursor: pointer; margin-right: 8px; }
+.editor-topbar .layout-name { font-size: 13px; color: #adb5bd; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-spacer { flex: 1; }
+.tab-bar { display: flex; gap: 3px; padding: 0 12px; background: #f1f3f5; flex-shrink: 0; align-items: flex-end; min-height: 34px; }
+.tab-btn { padding: 5px 14px; font-size: 12px; border-radius: 6px 6px 0 0; background: #dee2e6; color: var(--text2); font-weight: 500; position: relative; }
+.tab-btn.active { background: var(--surface); color: var(--text); }
+.tab-btn.add-tab { background: none; color: var(--text3); font-size: 16px; padding: 4px 10px; }
+.tab-btn .tab-close { margin-left: 6px; font-size: 14px; color: #adb5bd; cursor: pointer; }
+.tab-btn .tab-close:hover { color: var(--danger); }
+.slider-bar { display: flex; align-items: center; gap: 8px; padding: 4px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 11px; color: var(--text3); }
+.slider-bar input[type=range] { flex: 1; accent-color: var(--primary); }
+.slider-bar .date-label { background: var(--primary-light); color: var(--primary); padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px; }
+.editor-body { display: flex; flex: 1; overflow: hidden; }
+
+/* toolbar */
+.toolbar { width: 48px; background: #2b2b2b; display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 4px; flex-shrink: 0; }
+.tool-btn { width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #ccc; transition: .15s; position: relative; }
+.tool-btn:hover { background: #444; color: #fff; }
+.tool-btn.active { background: var(--primary); color: #fff; }
+.tool-btn .tip { position: absolute; left: 50px; background: #333; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; display: none; z-index: 99; }
+.tool-btn:hover .tip { display: block; }
+.tool-sep { width: 28px; height: 1px; background: #444; margin: 4px 0; }
+
+/* canvas */
+.canvas-wrap { flex: 1; overflow: auto; position: relative; background: var(--surface); }
+.floor-scaler { transform-origin: 0 0; transition: transform .15s; }
+.floor { position: relative; background: var(--surface); background-image: linear-gradient(to right, var(--grid-dot) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-dot) 1px, transparent 1px); background-size: var(--grid-size) var(--grid-size); box-shadow: var(--shadow); margin: 20px; min-width: 800px; min-height: 600px; }
+.floor.no-grid { background-image: none; }
+.zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 4px; z-index: 20; }
+.zoom-controls button { width: 32px; height: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
+.zoom-controls button:hover { background: #f1f3f5; }
+.zoom-controls .zoom-label { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 11px; display: flex; align-items: center; box-shadow: var(--shadow); }
+.fixture { position: absolute; border-radius: 4px; border: 2px solid rgba(0,0,0,.2); cursor: move; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 11px; line-height: 1.2; color: #1a1a1a; user-select: none; transition: box-shadow .15s; z-index: 2; }
+.fixture:hover { box-shadow: 0 2px 8px rgba(0,0,0,.2); z-index: 5; }
+.fixture.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); z-index: 10; }
+.fixture .f-label { font-weight: 600; font-size: 11px; pointer-events: none; }
+.fixture .f-contents { font-size: 10px; color: #333; pointer-events: none; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 2px; }
+.fixture .f-sub { font-size: 9px; color: #555; pointer-events: none; }
+.fixture .resize-handle { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: var(--primary); border: 2px solid #fff; border-radius: 2px; cursor: nwse-resize; z-index: 11; display: none; }
+.fixture.selected .resize-handle { display: block; }
+.fixture .elev-btn { position: absolute; top: -1px; right: -1px; background: rgba(0,0,0,.65); color: #fff; border-radius: 0 4px 0 6px; padding: 3px 8px; font-size: 10px; font-weight: 600; display: none; cursor: pointer; z-index: 12; }
+.fixture:hover .elev-btn, .fixture.selected .elev-btn { display: block; }
+
+/* annotations */
+.anno { position: absolute; z-index: 1; pointer-events: none; }
+.anno-entrance, .anno-register, .anno-pillar { display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 10px; font-weight: 700; color: #fff; pointer-events: auto; cursor: move; }
+.anno-entrance { width: 40px; height: 40px; background: #37b24d; }
+.anno-register { width: 40px; height: 40px; background: #f76707; }
+.anno-pillar { width: 24px; height: 24px; background: #868e96; border-radius: 4px; }
+.anno-arrow { pointer-events: auto; cursor: move; }
+.anno-arrow line { stroke: #339af0; stroke-width: 2; marker-end: url(#arrowhead); }
+.anno-arrow.selected line:last-child { stroke: var(--primary); stroke-width: 3; }
+.anno-entrance.selected, .anno-register.selected, .anno-pillar.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* side panel */
+.side-panel { width: 300px; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+.panel-toggle { display: none; }
+.panel-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.panel-section h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.panel-section h4 button { font-size: 14px; color: var(--primary); }
+.project-list { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+.project-item { display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 6px; background: #f8f9fa; margin-bottom: 4px; cursor: pointer; transition: .15s; }
+.project-item:hover { background: #e9ecef; }
+.project-item.inactive { opacity: .4; }
+.project-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.project-info { flex: 1; min-width: 0; }
+.project-info b { font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-info span { font-size: 9px; color: var(--text3); }
+.suggest-box { background: #f3f0ff; border: 1px solid #d0bfff; border-radius: 6px; padding: 10px; margin: 10px 12px; }
+.suggest-box h4 { color: #7048e8; font-size: 12px; margin-bottom: 6px; }
+.suggest-patterns { display: flex; gap: 4px; }
+.suggest-pat { flex: 1; border: 1px solid #d0bfff; border-radius: 5px; padding: 6px; text-align: center; font-size: 10px; background: #fff; cursor: pointer; transition: .15s; }
+.suggest-pat:hover { background: #e5dbff; }
+
+/* ── ELEVATION MODAL ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; display: none; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--surface); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.2); max-width: 90vw; max-height: 90vh; overflow: auto; }
+.modal-header { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); gap: 10px; }
+.modal-header h3 { flex: 1; font-size: 15px; }
+.modal-close { font-size: 20px; color: var(--text3); padding: 4px; }
+.modal-body { padding: 18px; }
+
+/* elevation editor */
+.elev-editor { min-width: 500px; }
+.elev-type-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+.elev-type-btn { padding: 6px 16px; border: 2px solid var(--border); border-radius: 6px; font-weight: 600; color: var(--text2); }
+.elev-type-btn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.shelf-view { border: 2px solid #adb5bd; border-radius: 6px; padding: 8px; min-height: 200px; }
+.shelf-row { display: flex; gap: 4px; padding: 8px 4px; border-bottom: 3px solid #adb5bd; min-height: 44px; align-items: stretch; flex-wrap: wrap; }
+.shelf-row:last-child { border-bottom: none; }
+.shelf-item { min-width: 50px; flex: 1; max-width: 150px; height: 36px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; border: 1px solid rgba(0,0,0,.12); cursor: pointer; position: relative; }
+.shelf-item .del-x { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; display: none; align-items: center; justify-content: center; cursor: pointer; }
+.shelf-item:hover .del-x { display: flex; }
+.shelf-add-item { min-width: 40px; height: 36px; border: 2px dashed #ced4da; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #adb5bd; cursor: pointer; }
+.shelf-add-item:hover { border-color: var(--primary); color: var(--primary); }
+.hook-view { border: 2px solid #adb5bd; border-radius: 6px; padding: 10px; min-height: 200px; display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 8px; }
+.hook-item { height: 60px; border-radius: 4px 4px 8px 8px; display: flex; align-items: center; justify-content: center; font-size: 9px; text-align: center; border: 1px solid rgba(0,0,0,.12); position: relative; cursor: pointer; }
+.hook-item::before { content: ""; position: absolute; top: -8px; width: 10px; height: 10px; border: 2px solid #868e96; border-bottom: none; border-radius: 8px 8px 0 0; }
+.hook-item .del-x { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; display: none; align-items: center; justify-content: center; cursor: pointer; }
+.hook-item:hover .del-x { display: flex; }
+.hook-add { height: 60px; border: 2px dashed #ced4da; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #adb5bd; cursor: pointer; }
+.hook-add:hover { border-color: var(--primary); color: var(--primary); }
+.elev-actions { display: flex; gap: 8px; margin-top: 12px; }
+.shelf-add-row { width: 100%; padding: 6px; border: 2px dashed #ced4da; border-radius: 4px; text-align: center; color: #adb5bd; cursor: pointer; margin-top: 6px; font-size: 12px; }
+.shelf-add-row:hover { border-color: var(--primary); color: var(--primary); }
+
+/* small modals / forms */
+.form-group { margin-bottom: 10px; }
+.form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 3px; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+.form-row { display: flex; gap: 10px; }
+.form-row .form-group { flex: 1; }
+.color-options { display: flex; gap: 6px; flex-wrap: wrap; }
+.color-opt { width: 28px; height: 28px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; transition: .15s; }
+.color-opt.selected { border-color: var(--text); transform: scale(1.15); }
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  .gallery-header { padding: 16px 16px 10px; }
+  .gallery-grid { padding: 0 16px 16px; grid-template-columns: 1fr; }
+  .editor-topbar { padding: 4px 8px; flex-wrap: wrap; }
+  .editor-topbar .layout-name { max-width: 120px; font-size: 11px; }
+  .editor-topbar .btn { padding: 4px 8px; font-size: 11px; }
+  .tab-bar { padding: 0 8px; overflow-x: auto; flex-wrap: nowrap; }
+  .tab-btn { white-space: nowrap; flex-shrink: 0; }
+  .slider-bar { padding: 4px 8px; }
+  .editor-body { flex-direction: column; }
+  .toolbar { width: 100%; flex-direction: row; padding: 4px 8px; gap: 2px; overflow-x: auto; flex-shrink: 0; }
+  .tool-btn { width: 32px; height: 32px; font-size: 16px; flex-shrink: 0; }
+  .tool-btn .tip { display: none !important; }
+  .canvas-wrap { flex: 1; min-height: 300px; }
+  .floor { margin: 10px; }
+  .side-panel { width: 100%; max-height: 40vh; border-left: none; border-top: 1px solid var(--border); }
+  .side-panel.collapsed { max-height: 36px; overflow: hidden; }
+  .panel-toggle { display: flex; align-items: center; justify-content: center; padding: 8px; font-size: 12px; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 1px solid var(--border); }
+  .suggest-box { margin: 6px 8px; padding: 6px; }
+  .modal { width: 95vw !important; max-height: 85vh; }
+  .elev-editor { min-width: auto; }
+  .fixture .elev-btn { padding: 4px 10px; font-size: 11px; }
+  .fixture .resize-handle { width: 14px; height: 14px; right: -7px; bottom: -7px; }
+}
+
+/* print */
+@media print {
+  body { overflow: visible; height: auto; }
+  #gallery, .editor-topbar, .toolbar, .slider-bar, .tab-bar, .side-panel, .modal-overlay { display: none !important; }
+  #editor { display: flex !important; }
+  .editor-body { display: block !important; }
+  .canvas-wrap { overflow: visible !important; }
+  .floor { margin: 0 !important; box-shadow: none !important; page-break-after: always; }
+  .fixture .elev-btn, .fixture .resize-handle { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- SVG defs for arrow markers -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <marker id="arrowhead" markerWidth="6" markerHeight="5" refX="5.5" refY="2.5" orient="auto">
+      <polygon points="0 0, 6 2.5, 0 5" fill="#339af0" />
+    </marker>
+  </defs>
+</svg>
+
+<!-- ══════ GALLERY VIEW ══════ -->
+<div id="gallery" class="active">
+  <div class="gallery-header">
+    <h1>URIBA</h1>
+    <input class="gallery-filter" type="text" placeholder="店舗名・レイアウト名で絞り込み..." id="galleryFilter">
+    <span style="flex:1"></span>
+    <button class="btn btn-outline" onclick="importLayout()">取り込み</button>
+    <button class="btn btn-primary" onclick="showNewLayoutModal()">＋ 新規レイアウト</button>
+  </div>
+  <div id="galleryContent" class="gallery-grid"></div>
+</div>
+
+<!-- ══════ EDITOR VIEW ══════ -->
+<div id="editor">
+  <div class="editor-topbar">
+    <span class="logo" onclick="backToGallery()">URIBA</span>
+    <span class="layout-name" id="editorTitle"></span>
+    <span class="topbar-spacer"></span>
+    <button class="btn btn-ghost btn-sm" onclick="exportLayout()">共有ファイル保存</button>
+    <button class="btn btn-ghost btn-sm" onclick="window.print()">印刷 / PDF</button>
+  </div>
+
+  <div class="tab-bar" id="tabBar"></div>
+
+  <div class="slider-bar">
+    <span id="sliderMin">4月</span>
+    <input type="range" id="dateSlider" min="0" max="365" value="0">
+    <span id="sliderMax">3月</span>
+    <span class="date-label" id="sliderDate">---</span>
+  </div>
+
+  <div class="editor-body">
+    <div class="toolbar">
+      <button class="tool-btn active" data-tool="select" onclick="setTool('select')">↖<span class="tip">選択/移動</span></button>
+      <button class="tool-btn" data-tool="fixture" onclick="setTool('fixture')">▢<span class="tip">什器を追加</span></button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" data-tool="entrance" onclick="setTool('entrance')">E<span class="tip">入口</span></button>
+      <button class="tool-btn" data-tool="register" onclick="setTool('register')">R<span class="tip">レジ</span></button>
+      <button class="tool-btn" data-tool="arrow" onclick="setTool('arrow')">→<span class="tip">導線（矢印）</span></button>
+      <button class="tool-btn" data-tool="pillar" onclick="setTool('pillar')">■<span class="tip">柱/壁</span></button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" id="gridToggle" onclick="toggleGrid()">＃<span class="tip">格子 表示/非表示</span></button>
+      <button class="tool-btn" onclick="copySelected()">⧉<span class="tip">コピー</span></button>
+      <button class="tool-btn" onclick="undoAction()">↩<span class="tip">元に戻す</span></button>
+      <button class="tool-btn" onclick="deleteSelected()">🗑<span class="tip">削除</span></button>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="floor-scaler" id="floorScaler">
+        <div class="floor" id="floor"></div>
+      </div>
+      <div class="zoom-controls">
+        <button onclick="zoomFloor(-1)">−</button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button onclick="zoomFloor(1)">＋</button>
+        <button onclick="zoomFloor(0)">↺</button>
+      </div>
+    </div>
+
+    <div class="side-panel" id="sidePanel">
+      <div class="panel-toggle" onclick="document.getElementById('sidePanel').classList.toggle('collapsed')">▼ 企画パネル</div>
+      <div class="panel-section">
+        <h4>企画リスト <button onclick="showProjectModal()">＋</button></h4>
+      </div>
+      <div class="project-list" id="projectList"></div>
+      <div class="suggest-box">
+        <h4>配置を提案する</h4>
+        <div class="suggest-patterns">
+          <div class="suggest-pat" onclick="suggest('sales')">売上重視</div>
+          <div class="suggest-pat" onclick="suggest('size')">大型優先</div>
+          <div class="suggest-pat" onclick="suggest('category')">カテゴリ集約</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ MODALS ══════ -->
+
+<!-- New Layout Modal -->
+<div class="modal-overlay" id="newLayoutModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header"><h3>新規レイアウト</h3><button class="modal-close" onclick="closeModal('newLayoutModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>レイアウト名</label><input id="nlName" placeholder="例：ダイソー向日町店 10月"></div>
+      <div class="form-group"><label>店舗名</label><input id="nlStore" placeholder="例：ダイソー向日町店"></div>
+      <div class="form-row">
+        <div class="form-group"><label>フロア幅 (px)</label><input id="nlWidth" type="number" value="900"></div>
+        <div class="form-group"><label>フロア高さ (px)</label><input id="nlHeight" type="number" value="600"></div>
+      </div>
+      <div class="form-group"><label>グリッドサイズ</label><input id="nlGrid" type="number" value="20"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('newLayoutModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="createLayout()">作成</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fixture Edit Modal -->
+<div class="modal-overlay" id="fixtureModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-header"><h3>什器の設定</h3><button class="modal-close" onclick="closeModal('fixtureModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>ラベル</label><input id="fxLabel" placeholder="例：B1-B3"></div>
+      <div class="form-group"><label>陳列内容</label><input id="fxContents" placeholder="例：ハロウィン装飾・お菓子"></div>
+      <div class="form-group"><label>カテゴリー名</label><input id="fxCategory" placeholder="例：季節催事"></div>
+      <div class="form-group"><label>色</label>
+        <div class="color-options" id="fxColors"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>幅</label><input id="fxW" type="number"></div>
+        <div class="form-group"><label>高さ</label><input id="fxH" type="number"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>X</label><input id="fxX" type="number"></div>
+        <div class="form-group"><label>Y</label><input id="fxY" type="number"></div>
+      </div>
+      <div class="form-group"><label>場所の優先度</label>
+        <select id="fxPriority"><option value="high">高（入口近く等）</option><option value="mid">中</option><option value="low">低</option></select>
+      </div>
+      <div class="form-group"><label>紐付け企画</label><select id="fxProject"><option value="">（なし）</option></select></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('fixtureModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="saveFixture()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Project Modal -->
+<div class="modal-overlay" id="projectModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-header"><h3 id="projModalTitle">企画を追加</h3><button class="modal-close" onclick="closeModal('projectModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>企画名</label><input id="pjName" placeholder="例：ハロウィン"></div>
+      <div class="form-group"><label>カテゴリー</label><input id="pjCategory" placeholder="例：季節催事"></div>
+      <div class="form-group"><label>色</label><div class="color-options" id="pjColors"></div></div>
+      <div class="form-row">
+        <div class="form-group"><label>展開開始</label><input id="pjStart" type="date"></div>
+        <div class="form-group"><label>終了（引当期日）</label><input id="pjEnd" type="date"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>アイテム数</label><input id="pjItems" type="number" placeholder="例：508"></div>
+        <div class="form-group"><label>売上（優先度）</label><input id="pjSales" type="number" placeholder="例：100"></div>
+      </div>
+      <div class="form-group"><label>サイズ</label>
+        <select id="pjSize"><option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option></select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-danger btn-sm" id="projDeleteBtn" style="margin-right:auto;display:none" onclick="deleteProject()">削除</button>
+        <button class="btn btn-outline" onclick="closeModal('projectModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="saveProject()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Elevation Modal -->
+<div class="modal-overlay" id="elevModal">
+  <div class="modal" style="width:600px">
+    <div class="modal-header">
+      <h3 id="elevTitle">正面図</h3>
+      <button class="modal-close" onclick="closeModal('elevModal')">&times;</button>
+    </div>
+    <div class="modal-body elev-editor">
+      <div class="elev-type-toggle">
+        <button class="elev-type-btn active" data-etype="shelf" onclick="setElevType('shelf')">棚タイプ</button>
+        <button class="elev-type-btn" data-etype="hook" onclick="setElevType('hook')">フックタイプ</button>
+      </div>
+      <div id="elevContent"></div>
+      <div class="elev-actions">
+        <button class="btn btn-outline" onclick="closeModal('elevModal')">閉じる</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-primary" onclick="saveElevation()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Item Edit Mini-Modal (for shelf/hook items) -->
+<div class="modal-overlay" id="itemModal">
+  <div class="modal" style="width:320px">
+    <div class="modal-header"><h3>商品を編集</h3><button class="modal-close" onclick="closeModal('itemModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>商品名</label><input id="itemLabel" placeholder="例：オーナメント"></div>
+      <div class="form-group"><label>色</label><div class="color-options" id="itemColors"></div></div>
+      <div class="form-group"><label>幅（倍率 1〜3）</label><input id="itemSpan" type="number" value="1" min="1" max="3"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('itemModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="saveItem()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+const COLORS = ['#ffd8a8','#a5d8ff','#b2f2bb','#ffc9c9','#eebefa','#ffec99','#fcc2d7','#d0bfff','#99e9f2','#e9ecef'];
+const SIZE_MAP = { small: 1, medium: 2, large: 3 };
+
+let state = {
+  layouts: [],
+  currentLayoutId: null,
+  view: 'gallery'
+};
+
+let editorState = {
+  tool: 'select',
+  selectedFixtureId: null,
+  selectedAnnoId: null,
+  dragging: null,
+  resizing: null,
+  arrowStart: null,
+  undoStack: [],
+  editingFixtureId: null,
+  editingProjectId: null,
+  editingItemInfo: null,
+  currentElevFixtureId: null,
+  tempElevation: null
+};
+
+function pointerXY(e) {
+  if (e.touches && e.touches.length) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  if (e.changedTouches && e.changedTouches.length) return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+  return { clientX: e.clientX, clientY: e.clientY };
+}
+
+function currentLayout() {
+  return state.layouts.find(l => l.id === state.currentLayoutId);
+}
+function currentMonth() {
+  const ly = currentLayout();
+  return ly ? ly.currentMonth : null;
+}
+function monthData() {
+  const ly = currentLayout();
+  if (!ly) return null;
+  return ly.months.find(m => m.name === ly.currentMonth);
+}
+
+// ════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function snap(v, grid) { return Math.round(v / grid) * grid; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function dateToDay(dateStr, fiscalStart) {
+  if (!dateStr) return -1;
+  const d = new Date(dateStr);
+  const s = new Date(fiscalStart);
+  return Math.round((d - s) / 86400000);
+}
+function dayToDate(day, fiscalStart) {
+  const d = new Date(fiscalStart);
+  d.setDate(d.getDate() + day);
+  return d;
+}
+function fmtDate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${dt.getFullYear()}/${dt.getMonth()+1}/${dt.getDate()}`;
+}
+function fmtMonth(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${dt.getMonth()+1}月`;
+}
+
+// ════════════════════════════════════════
+// PERSISTENCE
+// ════════════════════════════════════════
+function saveState() {
+  try { localStorage.setItem('uriba_state', JSON.stringify(state)); } catch(e) {}
+}
+function loadState() {
+  try {
+    const s = localStorage.getItem('uriba_state');
+    if (s) { state = JSON.parse(s); }
+  } catch(e) {}
+}
+
+function exportLayout() {
+  const ly = currentLayout();
+  if (!ly) return;
+  const blob = new Blob([JSON.stringify(ly, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (ly.name || 'layout') + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importLayout() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const ly = JSON.parse(ev.target.result);
+        ly.id = uid();
+        state.layouts.push(ly);
+        saveState();
+        renderGallery();
+      } catch(err) { alert('ファイルの読み込みに失敗しました: ' + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// ════════════════════════════════════════
+// GALLERY
+// ════════════════════════════════════════
+function renderGallery() {
+  const container = document.getElementById('galleryContent');
+  const filter = document.getElementById('galleryFilter').value.toLowerCase();
+  const layouts = state.layouts.filter(l =>
+    !filter || l.name.toLowerCase().includes(filter) || (l.store||'').toLowerCase().includes(filter)
+  );
+
+  if (layouts.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <h2>${state.layouts.length === 0 ? 'まだレイアウトがありません' : '該当なし'}</h2>
+      <p>${state.layouts.length === 0 ? '「＋ 新規レイアウト」で最初の売り場を作りましょう' : '検索条件を変えてみてください'}</p>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = layouts.map(l => `
+    <div class="gallery-card" onclick="openLayout('${l.id}')">
+      <div class="card-thumb"><canvas id="thumb_${l.id}" width="260" height="140"></canvas></div>
+      <div class="card-body">
+        <h3>${esc(l.name)}</h3>
+        <div class="meta">${esc(l.store || '')} / 更新: ${l.updatedAt || '—'}</div>
+      </div>
+      <div class="card-actions">
+        <button onclick="event.stopPropagation();duplicateLayout('${l.id}')">複製</button>
+        <button onclick="event.stopPropagation();deleteLayout('${l.id}')">削除</button>
+      </div>
+    </div>
+  `).join('');
+
+  layouts.forEach(l => drawThumb(l));
+}
+
+function drawThumb(layout) {
+  const c = document.getElementById('thumb_' + layout.id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const md = layout.months[0];
+  if (!md) return;
+  const scaleX = 260 / layout.floorWidth;
+  const scaleY = 140 / layout.floorHeight;
+  const sc = Math.min(scaleX, scaleY) * 0.9;
+  const ox = (260 - layout.floorWidth * sc) / 2;
+  const oy = (140 - layout.floorHeight * sc) / 2;
+
+  ctx.fillStyle = '#f8f9fa';
+  ctx.fillRect(0, 0, 260, 140);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(ox, oy, layout.floorWidth * sc, layout.floorHeight * sc);
+
+  (md.fixtures || []).forEach(f => {
+    ctx.fillStyle = f.color || '#e9ecef';
+    ctx.fillRect(ox + f.x * sc, oy + f.y * sc, f.w * sc, f.h * sc);
+    ctx.strokeStyle = 'rgba(0,0,0,.15)';
+    ctx.strokeRect(ox + f.x * sc, oy + f.y * sc, f.w * sc, f.h * sc);
+  });
+
+  (md.annotations || []).forEach(a => {
+    if (a.type === 'entrance') {
+      ctx.fillStyle = '#37b24d';
+      ctx.beginPath();
+      ctx.arc(ox + a.x * sc, oy + a.y * sc, 6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (a.type === 'register') {
+      ctx.fillStyle = '#f76707';
+      ctx.beginPath();
+      ctx.arc(ox + a.x * sc, oy + a.y * sc, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function showNewLayoutModal() {
+  document.getElementById('nlName').value = '';
+  document.getElementById('nlStore').value = '';
+  document.getElementById('nlWidth').value = 900;
+  document.getElementById('nlHeight').value = 600;
+  document.getElementById('nlGrid').value = 20;
+  openModal('newLayoutModal');
+}
+
+function createLayout() {
+  const name = document.getElementById('nlName').value.trim() || '新規レイアウト';
+  const store = document.getElementById('nlStore').value.trim();
+  const w = parseInt(document.getElementById('nlWidth').value) || 900;
+  const h = parseInt(document.getElementById('nlHeight').value) || 600;
+  const grid = parseInt(document.getElementById('nlGrid').value) || 20;
+  const today = new Date().toISOString().slice(0, 10);
+  const ly = {
+    id: uid(),
+    name, store,
+    createdAt: today, updatedAt: today,
+    floorWidth: w, floorHeight: h, gridSize: grid,
+    fiscalStart: new Date().getFullYear() + '-04-01',
+    months: [{ name: fmtMonth(new Date()), fixtures: [], annotations: [] }],
+    currentMonth: fmtMonth(new Date()),
+    projects: []
+  };
+  state.layouts.push(ly);
+  saveState();
+  closeModal('newLayoutModal');
+  openLayout(ly.id);
+}
+
+function deleteLayout(id) {
+  if (!confirm('このレイアウトを削除しますか？')) return;
+  state.layouts = state.layouts.filter(l => l.id !== id);
+  saveState();
+  renderGallery();
+}
+
+function duplicateLayout(id) {
+  const src = state.layouts.find(l => l.id === id);
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  copy.name = src.name + ' (コピー)';
+  copy.updatedAt = new Date().toISOString().slice(0, 10);
+  state.layouts.push(copy);
+  saveState();
+  renderGallery();
+}
+
+// ════════════════════════════════════════
+// EDITOR - OPEN / CLOSE
+// ════════════════════════════════════════
+function openLayout(id) {
+  state.currentLayoutId = id;
+  state.view = 'editor';
+  document.getElementById('gallery').classList.remove('active');
+  document.getElementById('editor').classList.add('active');
+  editorState = { ...editorState, tool: 'select', selectedFixtureId: null, selectedAnnoId: null, dragging: null, resizing: null, arrowStart: null, undoStack: [] };
+  initEditor();
+}
+
+function backToGallery() {
+  saveState();
+  state.currentLayoutId = null;
+  state.view = 'gallery';
+  document.getElementById('editor').classList.remove('active');
+  document.getElementById('gallery').classList.add('active');
+  renderGallery();
+}
+
+function initEditor() {
+  const ly = currentLayout();
+  if (!ly) return;
+  document.getElementById('editorTitle').textContent = ly.name + (ly.store ? ' — ' + ly.store : '');
+  const floor = document.getElementById('floor');
+  floor.style.width = ly.floorWidth + 'px';
+  floor.style.height = ly.floorHeight + 'px';
+  floor.style.backgroundSize = ly.gridSize + 'px ' + ly.gridSize + 'px';
+
+  initSlider();
+  renderTabs();
+  renderFloor();
+  renderProjects();
+  setTool('select');
+}
+
+// ════════════════════════════════════════
+// TABS (MONTHS)
+// ════════════════════════════════════════
+function renderTabs() {
+  const ly = currentLayout();
+  ly.deletedMonths = ly.deletedMonths || [];
+  const bar = document.getElementById('tabBar');
+  const closable = ly.months.length > 1;
+  bar.innerHTML = ly.months.map(m =>
+    `<button class="tab-btn ${m.name === ly.currentMonth ? 'active' : ''}" onclick="switchMonth('${esc(m.name)}')">${esc(m.name)}${closable ? `<span class="tab-close" onclick="event.stopPropagation();deleteMonth('${esc(m.name)}')">&times;</span>` : ''}</button>`
+  ).join('') + `<button class="tab-btn add-tab" onclick="addMonth()">＋</button>`;
+}
+
+function switchMonth(name) {
+  const ly = currentLayout();
+  ly.currentMonth = name;
+  renderTabs();
+  renderFloor();
+  saveState();
+}
+
+function deleteMonth(name) {
+  const ly = currentLayout();
+  if (ly.months.length <= 1) return;
+  if (!confirm(`「${name}」タブを削除しますか？（復元できます）`)) return;
+  pushUndo();
+  ly.deletedMonths = ly.deletedMonths || [];
+  const idx = ly.months.findIndex(m => m.name === name);
+  ly.deletedMonths.push(ly.months[idx]);
+  ly.months.splice(idx, 1);
+  if (ly.currentMonth === name) ly.currentMonth = ly.months[0].name;
+  renderTabs();
+  renderFloor();
+  saveState();
+}
+
+function addMonth() {
+  const ly = currentLayout();
+  ly.deletedMonths = ly.deletedMonths || [];
+  if (ly.deletedMonths.length > 0) {
+    const choices = ly.deletedMonths.map(m => m.name).join('、');
+    const restore = prompt(`新しい月の名前を入力（例：12月）\n\n復元可能なタブ: ${choices}\n（同じ名前を入力すると復元されます）`);
+    if (!restore) return;
+    const found = ly.deletedMonths.findIndex(m => m.name === restore);
+    if (found >= 0) {
+      pushUndo();
+      ly.months.push(ly.deletedMonths[found]);
+      ly.deletedMonths.splice(found, 1);
+      ly.currentMonth = restore;
+      renderTabs(); renderFloor(); saveState();
+      return;
+    }
+    if (ly.months.find(m => m.name === restore)) { alert('すでに存在します'); return; }
+    pushUndo();
+    const prev = monthData();
+    ly.months.push({
+      name: restore,
+      fixtures: prev ? JSON.parse(JSON.stringify(prev.fixtures)) : [],
+      annotations: prev ? JSON.parse(JSON.stringify(prev.annotations)) : []
+    });
+    ly.currentMonth = restore;
+    renderTabs(); renderFloor(); saveState();
+  } else {
+    const name = prompt('月の名前（例：12月）');
+    if (!name) return;
+    if (ly.months.find(m => m.name === name)) { alert('すでに存在します'); return; }
+    pushUndo();
+    const prev = monthData();
+    ly.months.push({
+      name,
+      fixtures: prev ? JSON.parse(JSON.stringify(prev.fixtures)) : [],
+      annotations: prev ? JSON.parse(JSON.stringify(prev.annotations)) : []
+    });
+    ly.currentMonth = name;
+    renderTabs(); renderFloor(); saveState();
+  }
+}
+
+// ════════════════════════════════════════
+// TIMELINE SLIDER
+// ════════════════════════════════════════
+function initSlider() {
+  const ly = currentLayout();
+  const slider = document.getElementById('dateSlider');
+  slider.value = dateToDay(new Date().toISOString().slice(0, 10), ly.fiscalStart);
+  updateSliderLabel();
+}
+
+function updateSliderLabel() {
+  const ly = currentLayout();
+  if (!ly) return;
+  const day = parseInt(document.getElementById('dateSlider').value);
+  const d = dayToDate(day, ly.fiscalStart);
+  document.getElementById('sliderDate').textContent = fmtDate(d);
+  filterByDate(d);
+}
+
+function filterByDate(date) {
+  const md = monthData();
+  if (!md) return;
+  const ly = currentLayout();
+  md.fixtures.forEach(f => {
+    const el = document.getElementById('fx_' + f.id);
+    if (!el) return;
+    if (f.projectId) {
+      const proj = ly.projects.find(p => p.id === f.projectId);
+      if (proj && proj.startDate && proj.endDate) {
+        const s = new Date(proj.startDate);
+        const e = new Date(proj.endDate);
+        const visible = date >= s && date <= e;
+        el.style.opacity = visible ? '1' : '0.2';
+        el.style.borderStyle = visible ? 'solid' : 'dashed';
+      }
+    }
+  });
+}
+
+document.getElementById('dateSlider').addEventListener('input', () => updateSliderLabel());
+
+// ════════════════════════════════════════
+// FLOOR RENDERING
+// ════════════════════════════════════════
+function renderFloor() {
+  const md = monthData();
+  const floor = document.getElementById('floor');
+  floor.innerHTML = '';
+  if (!md) return;
+
+  (md.annotations || []).forEach(a => {
+    if (a.type === 'arrow') {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const sel = a.id === editorState.selectedAnnoId;
+      svg.setAttribute('class', 'anno anno-arrow' + (sel ? ' selected' : ''));
+      svg.setAttribute('id', 'anno_' + a.id);
+      svg.style.position = 'absolute';
+      svg.style.left = '0'; svg.style.top = '0';
+      svg.style.width = '100%'; svg.style.height = '100%';
+      svg.style.pointerEvents = 'none';
+      svg.innerHTML = `<line x1="${a.x1}" y1="${a.y1}" x2="${a.x2}" y2="${a.y2}" style="pointer-events:stroke;stroke-width:12;stroke:transparent;cursor:pointer" /><line x1="${a.x1}" y1="${a.y1}" x2="${a.x2}" y2="${a.y2}" style="pointer-events:none" />`;
+      const arrowSelect = e => { e.stopPropagation(); e.preventDefault(); editorState.selectedAnnoId = a.id; editorState.selectedFixtureId = null; renderFloor(); };
+      svg.querySelector('line').addEventListener('mousedown', arrowSelect);
+      svg.querySelector('line').addEventListener('touchstart', arrowSelect, { passive: false });
+      floor.appendChild(svg);
+    } else {
+      const div = document.createElement('div');
+      div.id = 'anno_' + a.id;
+      div.className = 'anno anno-' + a.type + (a.id === editorState.selectedAnnoId ? ' selected' : '');
+      div.style.left = (a.x - (a.type === 'pillar' ? 12 : 20)) + 'px';
+      div.style.top = (a.y - (a.type === 'pillar' ? 12 : 20)) + 'px';
+      div.textContent = a.type === 'entrance' ? '入口' : a.type === 'register' ? 'ﾚｼﾞ' : '';
+      const annoHandler = e => {
+        e.stopPropagation();
+        e.preventDefault();
+        editorState.selectedAnnoId = a.id;
+        editorState.selectedFixtureId = null;
+        renderFloor();
+        startAnnoDrag(e, a);
+      };
+      div.addEventListener('mousedown', annoHandler);
+      div.addEventListener('touchstart', annoHandler, { passive: false });
+      floor.appendChild(div);
+    }
+  });
+
+  (md.fixtures || []).forEach(f => {
+    const div = document.createElement('div');
+    div.className = 'fixture' + (f.id === editorState.selectedFixtureId ? ' selected' : '');
+    div.id = 'fx_' + f.id;
+    div.style.left = f.x + 'px';
+    div.style.top = f.y + 'px';
+    div.style.width = f.w + 'px';
+    div.style.height = f.h + 'px';
+    div.style.background = f.color || '#e9ecef';
+    let subText = f.sub || '';
+    if (!subText && f.projectId) {
+      const proj = currentLayout().projects.find(p => p.id === f.projectId);
+      if (proj) subText = proj.name;
+    }
+    const contentsHtml = f.contents ? `<span class="f-contents">${esc(f.contents)}</span>` : '';
+    div.innerHTML = `<span class="f-label">${esc(f.label || '')}</span>${contentsHtml}<span class="f-sub">${esc(subText)}</span><div class="resize-handle"></div><div class="elev-btn" onmousedown="event.stopPropagation();openElevation('${f.id}')" ontouchstart="event.stopPropagation();event.preventDefault();openElevation('${f.id}')">正面図</div>`;
+    const fxHandler = e => startFixtureDrag(e, f);
+    div.addEventListener('mousedown', fxHandler);
+    div.addEventListener('touchstart', fxHandler, { passive: false });
+    const resHandle = div.querySelector('.resize-handle');
+    const resHandler = e => { e.stopPropagation(); e.preventDefault(); startResize(e, f); };
+    resHandle.addEventListener('mousedown', resHandler);
+    resHandle.addEventListener('touchstart', resHandler, { passive: false });
+    floor.appendChild(div);
+  });
+}
+
+// ════════════════════════════════════════
+// TOOLS
+// ════════════════════════════════════════
+function setTool(tool) {
+  editorState.tool = tool;
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tool === tool)
+  );
+  document.getElementById('floor').style.cursor =
+    tool === 'select' ? 'default' :
+    tool === 'fixture' ? 'crosshair' :
+    tool === 'arrow' ? 'crosshair' : 'copy';
+}
+
+function toggleGrid() {
+  const floor = document.getElementById('floor');
+  floor.classList.toggle('no-grid');
+  document.getElementById('gridToggle').classList.toggle('active');
+}
+
+let floorZoom = 1;
+function zoomFloor(dir) {
+  if (dir === 0) { floorZoom = 1; }
+  else { floorZoom = Math.max(0.3, Math.min(2, floorZoom + dir * 0.15)); }
+  floorZoom = Math.round(floorZoom * 100) / 100;
+  document.getElementById('floorScaler').style.transform = `scale(${floorZoom})`;
+  document.getElementById('zoomLabel').textContent = Math.round(floorZoom * 100) + '%';
+}
+
+// floor click handler
+function handleFloorDown(e) {
+  if (e.target !== this && !e.target.closest('.floor') === this) return;
+  if (e.target !== this) return;
+  const rect = this.getBoundingClientRect();
+  const ly = currentLayout();
+  const p = pointerXY(e);
+  const x = snap((p.clientX - rect.left) / floorZoom, ly.gridSize);
+  const y = snap((p.clientY - rect.top) / floorZoom, ly.gridSize);
+  const md = monthData();
+
+  if (editorState.tool === 'fixture') {
+    pushUndo();
+    const f = { id: uid(), x, y, w: ly.gridSize * 4, h: ly.gridSize * 3, label: '', sub: '', color: COLORS[0], category: '', priority: 'mid', projectId: '', elevation: null };
+    md.fixtures.push(f);
+    editorState.selectedFixtureId = f.id;
+    renderFloor();
+    saveState();
+    showFixtureModal(f.id);
+    setTool('select');
+  } else if (editorState.tool === 'entrance' || editorState.tool === 'register' || editorState.tool === 'pillar') {
+    pushUndo();
+    md.annotations = md.annotations || [];
+    md.annotations.push({ id: uid(), type: editorState.tool, x, y });
+    renderFloor(); saveState();
+    setTool('select');
+  } else if (editorState.tool === 'arrow') {
+    if (!editorState.arrowStart) {
+      editorState.arrowStart = { x, y };
+    } else {
+      pushUndo();
+      md.annotations = md.annotations || [];
+      md.annotations.push({ id: uid(), type: 'arrow', x1: editorState.arrowStart.x, y1: editorState.arrowStart.y, x2: x, y2: y });
+      editorState.arrowStart = null;
+      renderFloor(); saveState();
+      setTool('select');
+    }
+  } else if (editorState.tool === 'select') {
+    editorState.selectedFixtureId = null;
+    editorState.selectedAnnoId = null;
+    renderFloor();
+  }
+}
+document.getElementById('floor').addEventListener('mousedown', handleFloorDown);
+document.getElementById('floor').addEventListener('touchstart', handleFloorDown, { passive: true });
+
+// ════════════════════════════════════════
+// DRAG & RESIZE
+// ════════════════════════════════════════
+function startFixtureDrag(e, fixture) {
+  if (editorState.tool !== 'select') return;
+  if (e.target.classList.contains('elev-btn')) return;
+  e.preventDefault();
+  const wasSelected = editorState.selectedFixtureId === fixture.id;
+  editorState.selectedFixtureId = fixture.id;
+  editorState.selectedAnnoId = null;
+  renderFloor();
+
+  const ly = currentLayout();
+  const p0 = pointerXY(e);
+  const startX = p0.clientX, startY = p0.clientY;
+  const origX = fixture.x, origY = fixture.y;
+  let dragged = false;
+  pushUndo();
+
+  function onMove(ev) {
+    ev.preventDefault();
+    const p = pointerXY(ev);
+    const dx = (p.clientX - startX) / floorZoom;
+    const dy = (p.clientY - startY) / floorZoom;
+    if (!dragged && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    dragged = true;
+    fixture.x = snap(clamp(origX + dx, 0, ly.floorWidth - fixture.w), ly.gridSize);
+    fixture.y = snap(clamp(origY + dy, 0, ly.floorHeight - fixture.h), ly.gridSize);
+    const el = document.getElementById('fx_' + fixture.id);
+    if (el) { el.style.left = fixture.x + 'px'; el.style.top = fixture.y + 'px'; }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    if (!dragged && wasSelected) {
+      showFixtureModal(fixture.id);
+    }
+    saveState();
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onUp);
+}
+
+function startResize(e, fixture) {
+  e.preventDefault();
+  const ly = currentLayout();
+  const p0 = pointerXY(e);
+  const startX = p0.clientX, startY = p0.clientY;
+  const origW = fixture.w, origH = fixture.h;
+  pushUndo();
+
+  function onMove(ev) {
+    ev.preventDefault();
+    const p = pointerXY(ev);
+    const dw = (p.clientX - startX) / floorZoom;
+    const dh = (p.clientY - startY) / floorZoom;
+    fixture.w = snap(Math.max(ly.gridSize, origW + dw), ly.gridSize);
+    fixture.h = snap(Math.max(ly.gridSize, origH + dh), ly.gridSize);
+    const el = document.getElementById('fx_' + fixture.id);
+    if (el) { el.style.width = fixture.w + 'px'; el.style.height = fixture.h + 'px'; }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    saveState();
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onUp);
+}
+
+function startAnnoDrag(e, anno) {
+  if (editorState.tool !== 'select') return;
+  e.preventDefault();
+  const ly = currentLayout();
+  const p0 = pointerXY(e);
+  const startX = p0.clientX, startY = p0.clientY;
+  const origX = anno.x, origY = anno.y;
+
+  function onMove(ev) {
+    ev.preventDefault();
+    const p = pointerXY(ev);
+    anno.x = snap(origX + (p.clientX - startX) / floorZoom, ly.gridSize);
+    anno.y = snap(origY + (p.clientY - startY) / floorZoom, ly.gridSize);
+    renderFloor();
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    saveState();
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onUp);
+}
+
+// ════════════════════════════════════════
+// UNDO
+// ════════════════════════════════════════
+function pushUndo() {
+  const md = monthData();
+  if (!md) return;
+  editorState.undoStack.push(JSON.stringify(md));
+  if (editorState.undoStack.length > 30) editorState.undoStack.shift();
+}
+
+function undoAction() {
+  if (editorState.undoStack.length === 0) return;
+  const ly = currentLayout();
+  const prev = JSON.parse(editorState.undoStack.pop());
+  const idx = ly.months.findIndex(m => m.name === ly.currentMonth);
+  if (idx >= 0) ly.months[idx] = prev;
+  renderFloor();
+  saveState();
+}
+
+function deleteSelected() {
+  const md = monthData();
+  if (!md) return;
+  if (editorState.selectedFixtureId) {
+    pushUndo();
+    md.fixtures = md.fixtures.filter(f => f.id !== editorState.selectedFixtureId);
+    editorState.selectedFixtureId = null;
+    renderFloor(); saveState();
+  } else if (editorState.selectedAnnoId) {
+    pushUndo();
+    md.annotations = (md.annotations || []).filter(a => a.id !== editorState.selectedAnnoId);
+    editorState.selectedAnnoId = null;
+    renderFloor(); saveState();
+  }
+}
+
+function copySelected() {
+  const md = monthData();
+  if (!md || !editorState.selectedFixtureId) return;
+  const src = md.fixtures.find(f => f.id === editorState.selectedFixtureId);
+  if (!src) return;
+  pushUndo();
+  const ly = currentLayout();
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  copy.x = snap(Math.min(src.x + ly.gridSize * 2, ly.floorWidth - src.w), ly.gridSize);
+  copy.y = snap(Math.min(src.y + ly.gridSize * 2, ly.floorHeight - src.h), ly.gridSize);
+  md.fixtures.push(copy);
+  editorState.selectedFixtureId = copy.id;
+  renderFloor(); saveState();
+}
+
+// keyboard
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (state.view !== 'editor') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undoAction(); }
+  if (e.key === 'd' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); copySelected(); }
+  if (e.key === 'Escape') { editorState.selectedFixtureId = null; editorState.selectedAnnoId = null; editorState.arrowStart = null; renderFloor(); }
+});
+
+// ════════════════════════════════════════
+// FIXTURE MODAL
+// ════════════════════════════════════════
+function showFixtureModal(fxId) {
+  const md = monthData();
+  const f = md.fixtures.find(x => x.id === fxId);
+  if (!f) return;
+  editorState.editingFixtureId = fxId;
+  document.getElementById('fxLabel').value = f.label || '';
+  document.getElementById('fxContents').value = f.contents || '';
+  document.getElementById('fxCategory').value = f.category || '';
+  document.getElementById('fxW').value = f.w;
+  document.getElementById('fxH').value = f.h;
+  document.getElementById('fxX').value = f.x;
+  document.getElementById('fxY').value = f.y;
+  document.getElementById('fxPriority').value = f.priority || 'mid';
+
+  renderColorPicker('fxColors', f.color);
+
+  const sel = document.getElementById('fxProject');
+  const ly = currentLayout();
+  sel.innerHTML = '<option value="">(なし)</option>' + ly.projects.map(p => `<option value="${p.id}" ${p.id===f.projectId?'selected':''}>${esc(p.name)}</option>`).join('');
+
+  openModal('fixtureModal');
+}
+
+function saveFixture() {
+  const md = monthData();
+  const f = md.fixtures.find(x => x.id === editorState.editingFixtureId);
+  if (!f) return;
+  const ly = currentLayout();
+  f.label = document.getElementById('fxLabel').value;
+  f.contents = document.getElementById('fxContents').value;
+  f.category = document.getElementById('fxCategory').value;
+  f.w = parseInt(document.getElementById('fxW').value) || f.w;
+  f.h = parseInt(document.getElementById('fxH').value) || f.h;
+  f.x = snap(parseInt(document.getElementById('fxX').value) || f.x, ly.gridSize);
+  f.y = snap(parseInt(document.getElementById('fxY').value) || f.y, ly.gridSize);
+  f.priority = document.getElementById('fxPriority').value;
+  f.projectId = document.getElementById('fxProject').value;
+  f.color = getSelectedColor('fxColors') || f.color;
+
+  if (f.projectId) {
+    const proj = ly.projects.find(p => p.id === f.projectId);
+    if (proj) { f.color = proj.color; f.sub = proj.name; }
+  }
+
+  closeModal('fixtureModal');
+  renderFloor();
+  saveState();
+}
+
+// ════════════════════════════════════════
+// COLOR PICKER
+// ════════════════════════════════════════
+function renderColorPicker(containerId, selected) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = COLORS.map(col =>
+    `<div class="color-opt ${col===selected?'selected':''}" style="background:${col}" data-color="${col}" onclick="pickColor(this)"></div>`
+  ).join('');
+}
+
+function pickColor(el) {
+  el.parentElement.querySelectorAll('.color-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function getSelectedColor(containerId) {
+  const sel = document.getElementById(containerId).querySelector('.color-opt.selected');
+  return sel ? sel.dataset.color : null;
+}
+
+// ════════════════════════════════════════
+// PROJECTS
+// ════════════════════════════════════════
+function renderProjects() {
+  const ly = currentLayout();
+  const list = document.getElementById('projectList');
+  if (!ly || ly.projects.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:#adb5bd;font-size:12px">「＋」で企画を追加</div>';
+    return;
+  }
+
+  const sliderDay = parseInt(document.getElementById('dateSlider').value);
+  const curDate = dayToDate(sliderDay, ly.fiscalStart);
+
+  list.innerHTML = ly.projects.map(p => {
+    const active = (!p.startDate || !p.endDate) || (curDate >= new Date(p.startDate) && curDate <= new Date(p.endDate));
+    return `<div class="project-item ${active ? '' : 'inactive'}" onclick="showProjectModal('${p.id}')">
+      <div class="project-swatch" style="background:${p.color}"></div>
+      <div class="project-info">
+        <b>${esc(p.name)}</b>
+        <span>${p.startDate ? fmtDate(p.startDate) : '?'} 〜 ${p.endDate ? fmtDate(p.endDate) : '?'} / ${p.itemCount || 0}点${p.sales ? ' / 売上' + p.sales : ''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showProjectModal(id) {
+  const ly = currentLayout();
+  editorState.editingProjectId = id || null;
+  const proj = id ? ly.projects.find(p => p.id === id) : null;
+
+  document.getElementById('projModalTitle').textContent = proj ? '企画を編集' : '企画を追加';
+  document.getElementById('projDeleteBtn').style.display = proj ? 'block' : 'none';
+  document.getElementById('pjName').value = proj ? proj.name : '';
+  document.getElementById('pjCategory').value = proj ? proj.category : '';
+  document.getElementById('pjStart').value = proj ? proj.startDate : '';
+  document.getElementById('pjEnd').value = proj ? proj.endDate : '';
+  document.getElementById('pjItems').value = proj ? proj.itemCount : '';
+  document.getElementById('pjSales').value = proj ? proj.sales : '';
+  document.getElementById('pjSize').value = proj ? proj.size : 'medium';
+  renderColorPicker('pjColors', proj ? proj.color : COLORS[0]);
+  openModal('projectModal');
+}
+
+function saveProject() {
+  const ly = currentLayout();
+  const data = {
+    name: document.getElementById('pjName').value.trim() || '無題',
+    category: document.getElementById('pjCategory').value.trim(),
+    color: getSelectedColor('pjColors') || COLORS[0],
+    startDate: document.getElementById('pjStart').value,
+    endDate: document.getElementById('pjEnd').value,
+    itemCount: parseInt(document.getElementById('pjItems').value) || 0,
+    sales: parseInt(document.getElementById('pjSales').value) || 0,
+    size: document.getElementById('pjSize').value
+  };
+
+  if (editorState.editingProjectId) {
+    const proj = ly.projects.find(p => p.id === editorState.editingProjectId);
+    if (proj) Object.assign(proj, data);
+  } else {
+    ly.projects.push({ id: uid(), ...data });
+  }
+  closeModal('projectModal');
+  renderProjects();
+  updateSliderLabel();
+  saveState();
+}
+
+function deleteProject() {
+  if (!confirm('この企画を削除しますか？')) return;
+  const ly = currentLayout();
+  ly.projects = ly.projects.filter(p => p.id !== editorState.editingProjectId);
+  closeModal('projectModal');
+  renderProjects();
+  saveState();
+}
+
+// ════════════════════════════════════════
+// ELEVATION VIEW
+// ════════════════════════════════════════
+function openElevation(fxId) {
+  const md = monthData();
+  const f = md.fixtures.find(x => x.id === fxId);
+  if (!f) return;
+  editorState.currentElevFixtureId = fxId;
+  document.getElementById('elevTitle').textContent = '正面図: ' + (f.label || '什器');
+
+  if (!f.elevation) {
+    f.elevation = { type: 'shelf', rows: [{ items: [] }, { items: [] }, { items: [] }] };
+  }
+  editorState.tempElevation = JSON.parse(JSON.stringify(f.elevation));
+  setElevType(editorState.tempElevation.type);
+  openModal('elevModal');
+}
+
+function setElevType(type) {
+  editorState.tempElevation.type = type;
+  document.querySelectorAll('.elev-type-btn').forEach(b => b.classList.toggle('active', b.dataset.etype === type));
+  renderElevation();
+}
+
+function renderElevation() {
+  const elev = editorState.tempElevation;
+  const container = document.getElementById('elevContent');
+
+  if (elev.type === 'shelf') {
+    if (!elev.rows || elev.rows.length === 0) elev.rows = [{ items: [] }];
+    container.innerHTML = `<div class="shelf-view">
+      ${elev.rows.map((row, ri) => `<div class="shelf-row">
+        ${row.items.map((item, ii) => `<div class="shelf-item" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})">
+          ${esc(item.label || '?')}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
+        </div>`).join('')}
+        <div class="shelf-add-item" onclick="addItem('shelf',${ri})">＋</div>
+      </div>`).join('')}
+    </div>
+    <div class="shelf-add-row" onclick="addShelfRow()">＋ 段を追加</div>`;
+  } else {
+    if (!elev.hooks) elev.hooks = [];
+    container.innerHTML = `<div class="hook-view">
+      ${elev.hooks.map((item, i) => `<div class="hook-item" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})">
+        ${esc(item.label || '?')}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
+      </div>`).join('')}
+      <div class="hook-add" onclick="addItem('hook',0)">＋</div>
+    </div>`;
+  }
+}
+
+function addShelfRow() {
+  editorState.tempElevation.rows.push({ items: [] });
+  renderElevation();
+}
+
+function addItem(mode, rowIdx) {
+  editorState.editingItemInfo = { mode, rowIdx, itemIdx: -1 };
+  document.getElementById('itemLabel').value = '';
+  document.getElementById('itemSpan').value = 1;
+  renderColorPicker('itemColors', COLORS[0]);
+  openModal('itemModal');
+}
+
+function editItem(mode, rowIdx, itemIdx) {
+  const elev = editorState.tempElevation;
+  let item;
+  if (mode === 'shelf') item = elev.rows[rowIdx].items[itemIdx];
+  else item = elev.hooks[itemIdx];
+  if (!item) return;
+  editorState.editingItemInfo = { mode, rowIdx, itemIdx };
+  document.getElementById('itemLabel').value = item.label || '';
+  document.getElementById('itemSpan').value = item.span || 1;
+  renderColorPicker('itemColors', item.color || COLORS[0]);
+  openModal('itemModal');
+}
+
+function saveItem() {
+  const info = editorState.editingItemInfo;
+  const elev = editorState.tempElevation;
+  const data = {
+    label: document.getElementById('itemLabel').value.trim() || '商品',
+    color: getSelectedColor('itemColors') || COLORS[0],
+    span: parseInt(document.getElementById('itemSpan').value) || 1
+  };
+
+  if (info.mode === 'shelf') {
+    if (info.itemIdx === -1) elev.rows[info.rowIdx].items.push(data);
+    else Object.assign(elev.rows[info.rowIdx].items[info.itemIdx], data);
+  } else {
+    if (!elev.hooks) elev.hooks = [];
+    if (info.itemIdx === -1) elev.hooks.push(data);
+    else Object.assign(elev.hooks[info.itemIdx], data);
+  }
+  closeModal('itemModal');
+  renderElevation();
+}
+
+function removeItem(mode, rowIdx, itemIdx) {
+  const elev = editorState.tempElevation;
+  if (mode === 'shelf') elev.rows[rowIdx].items.splice(itemIdx, 1);
+  else elev.hooks.splice(itemIdx, 1);
+  renderElevation();
+}
+
+function saveElevation() {
+  const md = monthData();
+  const f = md.fixtures.find(x => x.id === editorState.currentElevFixtureId);
+  if (f) f.elevation = JSON.parse(JSON.stringify(editorState.tempElevation));
+  closeModal('elevModal');
+  saveState();
+}
+
+// ════════════════════════════════════════
+// SUGGESTION ENGINE
+// ════════════════════════════════════════
+function suggest(mode) {
+  const ly = currentLayout();
+  const md = monthData();
+  if (!ly || !md) return;
+
+  const projects = ly.projects.filter(p => p.startDate && p.endDate);
+  const fixtures = md.fixtures.filter(f => f.label);
+
+  if (projects.length === 0 || fixtures.length === 0) {
+    alert('提案するには、企画と什器の両方が必要です。\n企画を追加し、什器にラベルを付けてください。');
+    return;
+  }
+
+  const prioScore = { high: 3, mid: 2, low: 1 };
+  let sorted;
+
+  if (mode === 'sales') {
+    sorted = [...projects].sort((a, b) => (b.sales || 0) - (a.sales || 0));
+  } else if (mode === 'size') {
+    sorted = [...projects].sort((a, b) => (SIZE_MAP[b.size] || 0) - (SIZE_MAP[a.size] || 0));
+  } else {
+    const cats = {};
+    projects.forEach(p => { if (!cats[p.category]) cats[p.category] = []; cats[p.category].push(p); });
+    sorted = Object.values(cats).flat();
+  }
+
+  const fxSorted = [...fixtures].sort((a, b) => (prioScore[b.priority] || 0) - (prioScore[a.priority] || 0));
+
+  if (!confirm(`「${mode === 'sales' ? '売上重視' : mode === 'size' ? '大型優先' : 'カテゴリ集約'}」で${Math.min(sorted.length, fxSorted.length)}件を自動配置します。\n現在の紐付けは上書きされます。よろしいですか？`)) return;
+
+  pushUndo();
+  fxSorted.forEach(f => { f.projectId = ''; f.sub = ''; });
+
+  const count = Math.min(sorted.length, fxSorted.length);
+  for (let i = 0; i < count; i++) {
+    const proj = sorted[i];
+    let bestFx = null;
+    if (mode === 'size') {
+      const area = (SIZE_MAP[proj.size] || 1);
+      bestFx = fxSorted.find(f => !f.projectId && (f.w * f.h) >= area * 2000) || fxSorted.find(f => !f.projectId);
+    } else {
+      bestFx = fxSorted.find(f => !f.projectId);
+    }
+    if (bestFx) {
+      bestFx.projectId = proj.id;
+      bestFx.color = proj.color;
+      bestFx.sub = proj.name;
+    }
+  }
+
+  renderFloor();
+  renderProjects();
+  saveState();
+  alert('配置を提案しました。気に入らなければ「元に戻す」で戻せます。');
+}
+
+// auto-assign location priority based on distance to entrance/register
+function autoAssignPriority() {
+  const md = monthData();
+  if (!md) return;
+  const entrance = (md.annotations || []).find(a => a.type === 'entrance');
+  const register = (md.annotations || []).find(a => a.type === 'register');
+  if (!entrance && !register) return;
+
+  md.fixtures.forEach(f => {
+    const cx = f.x + f.w / 2;
+    const cy = f.y + f.h / 2;
+    let minDist = Infinity;
+    if (entrance) minDist = Math.min(minDist, Math.hypot(cx - entrance.x, cy - entrance.y));
+    if (register) minDist = Math.min(minDist, Math.hypot(cx - register.x, cy - register.y));
+
+    const ly = currentLayout();
+    const maxDist = Math.hypot(ly.floorWidth, ly.floorHeight);
+    const ratio = minDist / maxDist;
+    f.priority = ratio < 0.3 ? 'high' : ratio < 0.6 ? 'mid' : 'low';
+  });
+  saveState();
+}
+
+// ════════════════════════════════════════
+// MODAL HELPERS
+// ════════════════════════════════════════
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('mousedown', e => {
+    if (e.target === overlay) overlay.classList.remove('active');
+  });
+});
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+loadState();
+renderGallery();
+document.getElementById('galleryFilter').addEventListener('input', renderGallery);
+
+// auto-save every 10s
+setInterval(() => { if (state.view === 'editor') saveState(); }, 10000);
+
+// auto-assign priority when annotations change
+const origRenderFloor = renderFloor;
+</script>
+</body>
+</html>
