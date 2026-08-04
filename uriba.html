@@ -444,6 +444,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   <div class="modal" style="width:320px">
     <div class="modal-header"><h3>商品を編集</h3><button class="modal-close" onclick="closeModal('itemModal')">&times;</button></div>
     <div class="modal-body">
+      <div class="form-group" id="itemCatalogGroup" style="display:none"><label>カタログから選択</label><select id="itemCatalogSel" onchange="onItemCatalogSelect()" style="font-size:12px"></select></div>
       <div class="form-group"><label>商品名</label><input id="itemLabel" placeholder="例：オーナメント"></div>
       <div class="form-group"><label>色</label><div class="color-options" id="itemColors"></div></div>
       <div class="form-group"><label>幅（倍率 1〜3）</label><input id="itemSpan" type="number" value="1" min="1" max="3"></div>
@@ -451,6 +452,32 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
         <button class="btn btn-outline" onclick="closeModal('itemModal')">キャンセル</button>
         <button class="btn btn-primary" onclick="saveItem()">保存</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- CSV Paste for Category -->
+<div class="modal-overlay" id="csvCatModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header"><h3 id="csvCatTitle">CSV貼付</h3><button class="modal-close" onclick="closeModal('csvCatModal')">&times;</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">売れ数ランキングのデータ（順位・JAN・商品名・売上数量）をExcelからコピーして貼り付けてください</p>
+      <textarea id="csvCatArea" rows="6" style="width:100%;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical" placeholder="Excelからコピーした行をここに貼り付け"></textarea>
+      <div id="csvCatPreview" style="margin-top:8px;font-size:11px;max-height:180px;overflow-y:auto"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button class="btn btn-outline" onclick="closeModal('csvCatModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="importCsvCatalog()">登録</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Catalog Viewer -->
+<div class="modal-overlay" id="catalogModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header"><h3 id="catalogTitle">商品一覧</h3><button class="modal-close" onclick="closeModal('catalogModal')">&times;</button></div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+      <div id="catalogList"></div>
     </div>
   </div>
 </div>
@@ -1789,7 +1816,7 @@ function renderProjects() {
       <div class="project-swatch" style="background:${p.color}"></div>
       <div class="project-info">
         <b>${esc(p.name)}</b>
-        ${(Array.isArray(p.category) ? p.category : (p.category ? [p.category] : [])).length ? `<span style="font-size:10px;color:var(--text3)">${(Array.isArray(p.category) ? p.category : [p.category]).map(c => esc(c)).join(' / ')}</span>` : ''}
+        ${(Array.isArray(p.category) ? p.category : (p.category ? [p.category] : [])).length ? `<span style="font-size:10px;display:flex;flex-wrap:wrap;gap:3px">${(Array.isArray(p.category) ? p.category : [p.category]).map(c => { const cnt = p.catalog && p.catalog[c] ? p.catalog[c].length : 0; return `<span style="background:var(--primary-light);color:var(--primary);padding:1px 6px;border-radius:8px;cursor:pointer;border:1px solid var(--primary)" onclick="event.stopPropagation();showCatalogView('${p.id}','${esc(c)}')">${esc(c)}${cnt ? ' ('+cnt+')' : ''}</span>`; }).join('')}</span>` : ''}
         <span>${p.startDate ? fmtDate(p.startDate) : '?'} 〜 ${p.endDate ? fmtDate(p.endDate) : '?'} / ${p.itemCount || 0}点${p.sales ? ' / 売上' + p.sales : ''}</span>
         ${p.arrivalInfo ? `<span style="font-size:10px;color:var(--text3)">入荷: ${esc(p.arrivalInfo)}</span>` : ''}
         ${p.deployStart ? `<span style="font-size:10px;color:var(--text3)">展開: ${esc(p.deployStart)}</span>` : ''}
@@ -1852,9 +1879,13 @@ function saveProject() {
 
 function renderPjCatTags() {
   const el = document.getElementById('pjCatTags');
-  el.innerHTML = (editorState.pjCategories || []).map((c, i) =>
-    `<span class="cat-tag">${esc(c)}<span class="cat-del" onclick="removePjCategory(${i})">×</span></span>`
-  ).join('');
+  const projId = editorState.editingProjectId;
+  const ly = currentLayout();
+  const proj = projId ? ly.projects.find(p => p.id === projId) : null;
+  el.innerHTML = (editorState.pjCategories || []).map((c, i) => {
+    const cnt = proj && proj.catalog && proj.catalog[c] ? proj.catalog[c].length : 0;
+    return `<span class="cat-tag">${esc(c)}${cnt ? `<span style="font-size:9px;opacity:.7">(${cnt})</span>` : ''}<span class="cat-del" style="margin-left:2px;font-size:11px;cursor:pointer;opacity:.5" onclick="event.stopPropagation();openCsvCatPaste('${esc(c)}')" title="CSV貼付">📋</span><span class="cat-del" onclick="removePjCategory(${i})">×</span></span>`;
+  }).join('');
 }
 
 function addPjCategory() {
@@ -1871,6 +1902,95 @@ function addPjCategory() {
 function removePjCategory(idx) {
   editorState.pjCategories.splice(idx, 1);
   renderPjCatTags();
+}
+
+function openCsvCatPaste(catName) {
+  editorState.csvCatTarget = catName;
+  document.getElementById('csvCatTitle').textContent = 'CSV貼付: ' + catName;
+  document.getElementById('csvCatArea').value = '';
+  document.getElementById('csvCatPreview').innerHTML = '';
+  openModal('csvCatModal');
+  document.getElementById('csvCatArea').addEventListener('input', previewCsvCat, { once: false });
+}
+
+function previewCsvCat() {
+  const items = parseCsvRanking(document.getElementById('csvCatArea').value);
+  const el = document.getElementById('csvCatPreview');
+  if (items.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `<b>${items.length}件検出</b><table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px"><tr style="background:#f1f3f5"><th style="padding:2px 4px;text-align:left">JAN</th><th style="text-align:left">商品名</th><th style="text-align:right">売上数</th></tr>${items.slice(0,20).map(it => `<tr><td style="padding:2px 4px">${esc(it.jan)}</td><td>${esc(it.name)}</td><td style="text-align:right">${it.sales}</td></tr>`).join('')}${items.length > 20 ? '<tr><td colspan="3" style="text-align:center;color:#adb5bd">...他' + (items.length - 20) + '件</td></tr>' : ''}</table>`;
+}
+
+function parseCsvRanking(text) {
+  const items = [];
+  text.split('\n').forEach(line => {
+    const cols = line.split('\t');
+    if (cols.length < 3) return;
+    let jan = '', name = '', sales = 0;
+    for (let i = 0; i < cols.length; i++) {
+      const v = cols[i].trim();
+      if (!jan && /^\d{8,13}$/.test(v)) {
+        jan = v;
+        if (i + 1 < cols.length) name = cols[i + 1].trim();
+        for (let j = i + 2; j < cols.length; j++) {
+          const n = parseInt(cols[j].trim());
+          if (!isNaN(n) && n > 0) { sales = n; break; }
+        }
+        break;
+      }
+    }
+    if (jan && name) items.push({ jan, name, sales });
+  });
+  return items;
+}
+
+function importCsvCatalog() {
+  const items = parseCsvRanking(document.getElementById('csvCatArea').value);
+  if (items.length === 0) { alert('データが認識できません'); return; }
+  const catName = editorState.csvCatTarget;
+  const projId = editorState.editingProjectId;
+  const ly = currentLayout();
+  const proj = projId ? ly.projects.find(p => p.id === projId) : null;
+  if (!proj) { alert('企画が見つかりません'); return; }
+  if (!proj.catalog) proj.catalog = {};
+  proj.catalog[catName] = items.sort((a, b) => b.sales - a.sales);
+  closeModal('csvCatModal');
+  renderPjCatTags();
+  saveState();
+  showToast(items.length + '件のアイテムを登録しました');
+}
+
+function showCatalogView(projId, catName) {
+  const ly = currentLayout();
+  const proj = ly.projects.find(p => p.id === projId);
+  if (!proj || !proj.catalog || !proj.catalog[catName]) {
+    alert('このカテゴリーにはまだデータがありません。\n企画編集からCSV貼付で登録してください。');
+    return;
+  }
+  const items = proj.catalog[catName].sort((a, b) => b.sales - a.sales);
+  document.getElementById('catalogTitle').textContent = proj.name + ' / ' + catName + ' (' + items.length + '件)';
+  document.getElementById('catalogList').innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="background:#f1f3f5;position:sticky;top:0"><th style="padding:4px 6px;text-align:center;width:30px">#</th><th style="text-align:left">JAN</th><th style="text-align:left">商品名</th><th style="text-align:right;width:60px">売上数</th></tr>${items.map((it, i) => `<tr style="border-bottom:1px solid #eee"><td style="padding:4px 6px;text-align:center;color:#adb5bd">${i + 1}</td><td style="font-size:11px">${esc(it.jan)}</td><td>${esc(it.name)}</td><td style="text-align:right;font-weight:600">${it.sales}</td></tr>`).join('')}</table>`;
+  openModal('catalogModal');
+}
+
+function getCatalogForCategory(catName) {
+  const ly = currentLayout();
+  if (!ly) return [];
+  const all = [];
+  ly.projects.forEach(p => {
+    if (p.catalog && p.catalog[catName]) {
+      p.catalog[catName].forEach(it => {
+        if (!all.find(a => a.jan === it.jan)) all.push(it);
+      });
+    }
+  });
+  return all.sort((a, b) => b.sales - a.sales);
+}
+
+function onItemCatalogSelect() {
+  const sel = document.getElementById('itemCatalogSel');
+  if (!sel.value) return;
+  const parts = sel.value.split('|');
+  document.getElementById('itemLabel').value = parts[0] || '';
 }
 
 function deleteProject() {
@@ -2036,8 +2156,8 @@ function renderElevation() {
     container.innerHTML = `<div class="shelf-view">
       ${elev.rows.map((row, ri) => `<div class="shelf-row" style="position:relative">
         ${elev.rows.length > 1 ? `<div style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:4" onclick="removeShelfRow(${ri})">×</div>` : ''}
-        ${row.items.map((item, ii) => `<div class="shelf-item" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})">
-          ${esc(item.label || '?')}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
+        ${row.items.map((item, ii) => `<div class="shelf-item" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' : ''}">
+          ${esc(item.label || '?')}${item.sales ? '<span style="font-size:8px;opacity:.6;display:block;line-height:1">'+item.sales+'</span>' : ''}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
           ${ii > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},-1)">◀</div>` : ''}
           ${ii < row.items.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},1)">▶</div>` : ''}
         </div>`).join('')}
@@ -2048,8 +2168,8 @@ function renderElevation() {
   } else {
     if (!elev.hooks) elev.hooks = [];
     container.innerHTML = `<div class="hook-view">
-      ${elev.hooks.map((item, i) => `<div class="hook-item" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})">
-        ${esc(item.label || '?')}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
+      ${elev.hooks.map((item, i) => `<div class="hook-item" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' : ''}">
+        ${esc(item.label || '?')}${item.sales ? '<span style="font-size:8px;opacity:.6;display:block;line-height:1">'+item.sales+'</span>' : ''}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
         ${i > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('hook',0,${i},-1)">◀</div>` : ''}
         ${i < elev.hooks.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('hook',0,${i},1)">▶</div>` : ''}
       </div>`).join('')}
@@ -2070,11 +2190,27 @@ function removeShelfRow(rowIdx) {
   renderElevation();
 }
 
+function populateItemCatalog() {
+  const md = monthData();
+  const fxId = editorState.currentElevFixtureId;
+  const f = md ? md.fixtures.find(x => x.id === fxId) : null;
+  const grp = document.getElementById('itemCatalogGroup');
+  const sel = document.getElementById('itemCatalogSel');
+  if (!f || !f.category) { grp.style.display = 'none'; return; }
+  const items = getCatalogForCategory(f.category);
+  if (items.length === 0) { grp.style.display = 'none'; return; }
+  grp.style.display = '';
+  sel.innerHTML = '<option value="">(選択してください)</option>' +
+    items.map(it => `<option value="${esc(it.name)}|${esc(it.jan)}|${it.sales}">${esc(it.jan)} / ${esc(it.name)} / ${it.sales}個</option>`).join('');
+}
+
 function addItem(mode, rowIdx) {
   editorState.editingItemInfo = { mode, rowIdx, itemIdx: -1 };
   document.getElementById('itemLabel').value = '';
   document.getElementById('itemSpan').value = 1;
+  document.getElementById('itemCatalogSel').value = '';
   renderColorPicker('itemColors', COLORS[0]);
+  populateItemCatalog();
   openModal('itemModal');
 }
 
@@ -2087,18 +2223,26 @@ function editItem(mode, rowIdx, itemIdx) {
   editorState.editingItemInfo = { mode, rowIdx, itemIdx };
   document.getElementById('itemLabel').value = item.label || '';
   document.getElementById('itemSpan').value = item.span || 1;
+  document.getElementById('itemCatalogSel').value = '';
   renderColorPicker('itemColors', item.color || COLORS[0]);
+  populateItemCatalog();
   openModal('itemModal');
 }
 
 function saveItem() {
   const info = editorState.editingItemInfo;
   const elev = editorState.tempElevation;
+  const catSel = document.getElementById('itemCatalogSel').value;
   const data = {
     label: document.getElementById('itemLabel').value.trim() || '商品',
     color: getSelectedColor('itemColors') || COLORS[0],
     span: parseInt(document.getElementById('itemSpan').value) || 1
   };
+  if (catSel) {
+    const parts = catSel.split('|');
+    data.jan = parts[1] || '';
+    data.sales = parseInt(parts[2]) || 0;
+  }
 
   if (info.mode === 'shelf') {
     if (info.itemIdx === -1) elev.rows[info.rowIdx].items.push(data);
