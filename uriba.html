@@ -1020,7 +1020,7 @@ function renderTabs() {
   const bar = document.getElementById('tabBar');
   const closable = ly.months.length > 1;
   bar.innerHTML = ly.months.map(m =>
-    `<button class="tab-btn ${m.name === ly.currentMonth ? 'active' : ''}" onclick="switchMonth('${esc(m.name)}')">${esc(m.name)}${closable ? `<span class="tab-close" onclick="event.stopPropagation();deleteMonth('${esc(m.name)}')">&times;</span>` : ''}</button>`
+    `<button class="tab-btn ${m.name === ly.currentMonth ? 'active' : ''}" onclick="switchMonth('${esc(m.name)}')" ondblclick="event.stopPropagation();renameTab('${esc(m.name)}')">${esc(m.name)}${closable ? `<span class="tab-close" onclick="event.stopPropagation();deleteMonth('${esc(m.name)}')">&times;</span>` : ''}</button>`
   ).join('') + `<button class="tab-btn add-tab" onclick="addMonth()">＋</button>`;
 }
 
@@ -1029,6 +1029,19 @@ function switchMonth(name) {
   ly.currentMonth = name;
   renderTabs();
   renderFloor();
+  saveState();
+}
+
+function renameTab(oldName) {
+  const ly = currentLayout();
+  const newName = prompt('タブ名を変更', oldName);
+  if (!newName || newName === oldName) return;
+  if (ly.months.find(m => m.name === newName)) { alert('すでに存在します'); return; }
+  const month = ly.months.find(m => m.name === oldName);
+  if (!month) return;
+  month.name = newName;
+  if (ly.currentMonth === oldName) ly.currentMonth = newName;
+  renderTabs();
   saveState();
 }
 
@@ -1681,10 +1694,12 @@ function saveFixture() {
 }
 
 function syncProjectColorToFixtures(projectId, color) {
-  const md = monthData();
-  if (!md) return;
-  md.fixtures.forEach(f => {
-    if (f.projectId === projectId) f.color = color;
+  const ly = currentLayout();
+  if (!ly) return;
+  ly.months.forEach(month => {
+    month.fixtures.forEach(f => {
+      if (f.projectId === projectId) f.color = color;
+    });
   });
 }
 
