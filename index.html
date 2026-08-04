@@ -173,6 +173,10 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .shelf-add-row { width: 100%; padding: 6px; border: 2px dashed #ced4da; border-radius: 4px; text-align: center; color: #adb5bd; cursor: pointer; margin-top: 6px; font-size: 12px; }
 .shelf-add-row:hover { border-color: var(--primary); color: var(--primary); }
 
+.cat-tag { display:inline-flex; align-items:center; gap:3px; padding:3px 8px; background:var(--primary-light); border:1px solid var(--primary); border-radius:12px; font-size:11px; color:var(--primary); }
+.cat-tag .cat-del { cursor:pointer; font-size:13px; color:var(--primary); opacity:.6; }
+.cat-tag .cat-del:hover { opacity:1; color:var(--danger); }
+
 /* small modals / forms */
 .form-group { margin-bottom: 10px; }
 .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 3px; }
@@ -383,7 +387,10 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <div class="modal-header"><h3 id="projModalTitle">企画を追加</h3><button class="modal-close" onclick="closeModal('projectModal')">&times;</button></div>
     <div class="modal-body">
       <div class="form-group"><label>企画名</label><input id="pjName" placeholder="例：ハロウィン"></div>
-      <div class="form-group"><label>カテゴリー</label><input id="pjCategory" placeholder="例：季節催事"></div>
+      <div class="form-group"><label>カテゴリー</label>
+        <div id="pjCatTags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+        <div style="display:flex;gap:4px"><input id="pjCatInput" placeholder="例：季節催事" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addPjCategory()}"><button class="btn btn-outline btn-sm" type="button" onclick="addPjCategory()">追加</button></div>
+      </div>
       <div class="form-group"><label>色</label><div class="color-options" id="pjColors"></div></div>
       <div class="form-row">
         <div class="form-group"><label>展開開始</label><input id="pjStart" type="date"></div>
@@ -1743,6 +1750,7 @@ function renderProjects() {
       <div class="project-swatch" style="background:${p.color}"></div>
       <div class="project-info">
         <b>${esc(p.name)}</b>
+        ${(Array.isArray(p.category) ? p.category : (p.category ? [p.category] : [])).length ? `<span style="font-size:10px;color:var(--text3)">${(Array.isArray(p.category) ? p.category : [p.category]).map(c => esc(c)).join(' / ')}</span>` : ''}
         <span>${p.startDate ? fmtDate(p.startDate) : '?'} 〜 ${p.endDate ? fmtDate(p.endDate) : '?'} / ${p.itemCount || 0}点${p.sales ? ' / 売上' + p.sales : ''}</span>
         ${p.arrivalInfo ? `<span style="font-size:10px;color:var(--text3)">入荷: ${esc(p.arrivalInfo)}</span>` : ''}
         ${p.deployStart ? `<span style="font-size:10px;color:var(--text3)">展開: ${esc(p.deployStart)}</span>` : ''}
@@ -1759,7 +1767,8 @@ function showProjectModal(id) {
   document.getElementById('projModalTitle').textContent = proj ? '企画を編集' : '企画を追加';
   document.getElementById('projDeleteBtn').style.display = proj ? 'block' : 'none';
   document.getElementById('pjName').value = proj ? proj.name : '';
-  document.getElementById('pjCategory').value = proj ? proj.category : '';
+  editorState.pjCategories = proj ? (Array.isArray(proj.category) ? [...proj.category] : (proj.category ? [proj.category] : [])) : [];
+  renderPjCatTags();
   document.getElementById('pjStart').value = proj ? proj.startDate : '';
   document.getElementById('pjEnd').value = proj ? proj.endDate : '';
   document.getElementById('pjItems').value = proj ? proj.itemCount : '';
@@ -1775,7 +1784,7 @@ function saveProject() {
   const ly = currentLayout();
   const data = {
     name: document.getElementById('pjName').value.trim() || '無題',
-    category: document.getElementById('pjCategory').value.trim(),
+    category: [...(editorState.pjCategories || [])],
     color: getSelectedColor('pjColors') || COLORS[0],
     startDate: document.getElementById('pjStart').value,
     endDate: document.getElementById('pjEnd').value,
@@ -1800,6 +1809,29 @@ function saveProject() {
   renderFloor();
   updateSliderLabel();
   saveState();
+}
+
+function renderPjCatTags() {
+  const el = document.getElementById('pjCatTags');
+  el.innerHTML = (editorState.pjCategories || []).map((c, i) =>
+    `<span class="cat-tag">${esc(c)}<span class="cat-del" onclick="removePjCategory(${i})">×</span></span>`
+  ).join('');
+}
+
+function addPjCategory() {
+  const inp = document.getElementById('pjCatInput');
+  const val = inp.value.trim();
+  if (!val) return;
+  if (!editorState.pjCategories) editorState.pjCategories = [];
+  if (editorState.pjCategories.includes(val)) { inp.value = ''; return; }
+  editorState.pjCategories.push(val);
+  inp.value = '';
+  renderPjCatTags();
+}
+
+function removePjCategory(idx) {
+  editorState.pjCategories.splice(idx, 1);
+  renderPjCatTags();
 }
 
 function deleteProject() {
@@ -1902,7 +1934,7 @@ function importDaisoOrders() {
     ly.projects.push({
       id: uid(),
       name: r.name,
-      category: 'ダイソー事前オーダー',
+      category: ['ダイソー事前オーダー'],
       color: COLORS[(colorIdx + i) % COLORS.length],
       startDate: '',
       endDate: '',
@@ -1922,10 +1954,11 @@ function importDaisoOrders() {
 function bulkDeleteDaiso() {
   const ly = currentLayout();
   if (!ly) return;
-  const count = ly.projects.filter(p => p.category === 'ダイソー事前オーダー').length;
+  const hasCat = p => Array.isArray(p.category) ? p.category.includes('ダイソー事前オーダー') : p.category === 'ダイソー事前オーダー';
+  const count = ly.projects.filter(hasCat).length;
   if (count === 0) { alert('ダイソー事前オーダーの企画はありません'); return; }
   if (!confirm('ダイソー事前オーダーの企画 ' + count + '件をすべて削除しますか？')) return;
-  ly.projects = ly.projects.filter(p => p.category !== 'ダイソー事前オーダー');
+  ly.projects = ly.projects.filter(p => !hasCat(p));
   renderProjects();
   saveState();
   showToast(count + '件を削除しました');
@@ -2092,7 +2125,11 @@ function suggest(mode) {
     sorted = [...projects].sort((a, b) => (SIZE_MAP[b.size] || 0) - (SIZE_MAP[a.size] || 0));
   } else {
     const cats = {};
-    projects.forEach(p => { if (!cats[p.category]) cats[p.category] = []; cats[p.category].push(p); });
+    projects.forEach(p => {
+      const c = Array.isArray(p.category) ? (p.category[0] || '') : (p.category || '');
+      if (!cats[c]) cats[c] = [];
+      cats[c].push(p);
+    });
     sorted = Object.values(cats).flat();
   }
 
