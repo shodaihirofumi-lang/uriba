@@ -1324,10 +1324,34 @@ function handleFloorDown(e) {
     editorState.selectedFixtureId = null;
     editorState.selectedAnnoId = null;
     renderFloor();
+    if (e.touches) startFloorPan(e);
   }
 }
 document.getElementById('floor').addEventListener('mousedown', handleFloorDown);
-document.getElementById('floor').addEventListener('touchstart', handleFloorDown, { passive: true });
+document.getElementById('floor').addEventListener('touchstart', handleFloorDown, { passive: false });
+
+function startFloorPan(e) {
+  if (!e.touches || e.touches.length !== 1) return;
+  const wrap = document.getElementById('canvasWrap');
+  const t0 = e.touches[0];
+  const startX = t0.clientX, startY = t0.clientY;
+  const scrollL = wrap.scrollLeft, scrollT = wrap.scrollTop;
+  function onMove(ev) {
+    if (ev.touches.length !== 1) return;
+    ev.preventDefault();
+    const t = ev.touches[0];
+    wrap.scrollLeft = scrollL - (t.clientX - startX);
+    wrap.scrollTop = scrollT - (t.clientY - startY);
+  }
+  function onEnd() {
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('touchcancel', onEnd);
+  }
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+  document.addEventListener('touchcancel', onEnd);
+}
 
 // ════════════════════════════════════════
 // DRAG & RESIZE
