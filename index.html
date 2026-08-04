@@ -722,7 +722,7 @@ function renderGallery() {
       <div class="card-thumb"><canvas id="thumb_${l.id}" width="260" height="140"></canvas></div>
       <div class="card-body">
         <h3>${esc(l.name)}</h3>
-        <div class="meta">${esc(l.store || '')} / 更新: ${l.updatedAt || '—'}</div>
+        <div class="meta">${esc(l.store || '')} / 更新: ${l.updatedAt ? fmtDate(l.updatedAt) : '—'}</div>
       </div>
       <div class="card-actions">
         <button onclick="event.stopPropagation();duplicateLayout('${l.id}')">複製</button>
