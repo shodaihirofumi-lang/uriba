@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <title>URIBA — 売り場レイアウト計画</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -1276,7 +1277,9 @@ function startFixtureDrag(e, fixture) {
   e.preventDefault();
   editorState.selectedFixtureId = fixture.id;
   editorState.selectedAnnoId = null;
-  renderFloor();
+  document.querySelectorAll('.fixture.selected').forEach(el => el.classList.remove('selected'));
+  const thisEl = document.getElementById('fx_' + fixture.id);
+  if (thisEl) thisEl.classList.add('selected');
 
   const isTouch = !!(e.touches || e.changedTouches);
 
@@ -1891,8 +1894,6 @@ document.getElementById('galleryFilter').addEventListener('input', renderGallery
 // init Firebase auth & cloud sync
 initFirebaseAuth();
 
-// auto-save every 10s
-setInterval(() => { if (state.view === 'editor') saveState(); }, 10000);
 
 // auto-assign priority when annotations change
 const origRenderFloor = renderFloor;
