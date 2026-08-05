@@ -101,8 +101,12 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .fixture .elev-btn { position: absolute; top: -1px; right: -1px; background: rgba(0,0,0,.65); color: #fff; border-radius: 0 4px 0 6px; padding: 3px 8px; font-size: 10px; font-weight: 600; display: none; cursor: pointer; z-index: 12; }
 .fixture:hover .elev-btn, .fixture.selected .elev-btn { display: block; }
 /* timeline peak highlight: fixture holds a product at its weekly sales peak on the selected date */
-.fixture.peak-active { border-color: var(--danger) !important; border-width: 3px !important; box-shadow: 0 0 0 3px rgba(224,49,49,.35); animation: peakPulse 1s ease-in-out infinite; z-index: 8; }
-@keyframes peakPulse { 0%,100% { box-shadow: 0 0 0 2px rgba(224,49,49,.3); } 50% { box-shadow: 0 0 0 7px rgba(224,49,49,.15); } }
+.fixture.peak-active { border-color: var(--danger) !important; border-width: 4px !important; z-index: 9; animation: peakPulse .7s ease-in-out infinite; }
+@keyframes peakPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(224,49,49,.85), 0 0 14px 4px rgba(224,49,49,.55); border-color: #e03131 !important; transform: scale(1); }
+  50%  { box-shadow: 0 0 0 10px rgba(224,49,49,0), 0 0 26px 10px rgba(255,140,0,.75); border-color: #ff8c00 !important; transform: scale(1.045); }
+  100% { box-shadow: 0 0 0 0 rgba(224,49,49,.85), 0 0 14px 4px rgba(224,49,49,.55); border-color: #e03131 !important; transform: scale(1); }
+}
 
 /* annotations */
 .anno { position: absolute; z-index: 1; pointer-events: none; }
@@ -258,7 +262,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 <div id="gallery" class="active">
   <div class="gallery-header">
     <h1>URIBA</h1>
-    <input class="gallery-filter" type="text" placeholder="店舗名・レイアウト名で絞り込み..." id="galleryFilter">
+    <input class="gallery-filter" type="search" placeholder="店舗名・レイアウト名で絞り込み..." id="galleryFilter" name="uriba_gallery_search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
     <span style="flex:1"></span>
     <button class="btn btn-outline" onclick="showQrModal()">QR</button>
     <button class="btn btn-outline" onclick="importLayout()">取り込み</button>
@@ -2857,8 +2861,13 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // INIT
 // ════════════════════════════════════════
 loadState();
+// guard against the browser autofilling the search box with the saved username,
+// which would silently filter the whole gallery to "該当なし"
+const _gf = document.getElementById('galleryFilter');
+_gf.value = '';
+setTimeout(() => { if (_gf.value) { _gf.value = ''; renderGallery(); } }, 400);
 renderGallery();
-document.getElementById('galleryFilter').addEventListener('input', renderGallery);
+_gf.addEventListener('input', renderGallery);
 
 // init Firebase auth & cloud sync
 initFirebaseAuth();
