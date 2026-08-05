@@ -2264,8 +2264,9 @@ function showCatalogView(projId, catName) {
         const bl = (boundaryIdx === wi) ? 'border-left:1px dashed var(--danger);padding-left:1px' : '';
         const isPeak = w.qty === peak && w.qty > 0;
         const info = `${fmtWeekRange(w.year, w.week)}（${w.year}年${w.week}週）: ${w.qty}個`;
-        return `<div title="${esc(info)}" onclick="document.getElementById('catReadout').textContent='${esc(it.name)}　'+${JSON.stringify(info)}" style="flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:38px;cursor:pointer;${bl}">
-          <div style="width:100%;max-width:10px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:1px 1px 0 0"></div>
+        const tapJs = `event.stopPropagation();document.getElementById('catReadout').textContent='${esc(it.name)}　'+${JSON.stringify(info)}`;
+        return `<div onclick="${tapJs}" ontouchend="${tapJs}" style="flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:48px;cursor:pointer;padding-top:10px;${bl}">
+          <div style="width:100%;max-width:12px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:1px 1px 0 0;pointer-events:none"></div>
         </div>`;
       }).join('');
       return `<div style="border-bottom:1px solid #eee;padding:6px 2px">
@@ -2503,6 +2504,14 @@ function elevItemQtyLabel(item) {
   return '';
 }
 
+function elevItemInfo(item) {
+  if (!item.jan) return '';
+  const wq = itemWeekQty(item);
+  const qtyTxt = wq !== null ? wq + '個/週' : (item.sales || 0) + '個';
+  const peakTxt = item.peakLabel ? ' ピーク' + item.peakLabel : '';
+  return `<div style="font-size:8px;line-height:1.1;opacity:.7;margin-top:1px;pointer-events:none">${item.jan}<br>${qtyTxt}${peakTxt}</div>`;
+}
+
 function renderElevation() {
   const elev = editorState.tempElevation;
   const container = document.getElementById('elevContent');
@@ -2512,8 +2521,8 @@ function renderElevation() {
     container.innerHTML = `<div class="shelf-view">
       ${elev.rows.map((row, ri) => `<div class="shelf-row" style="position:relative">
         ${elev.rows.length > 1 ? `<div style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:4" onclick="removeShelfRow(${ri})">×</div>` : ''}
-        ${row.items.map((item, ii) => `<div class="shelf-item${item.jan ? ' placed' : ''}${isItemAtPeak(item) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' + (item.peakLabel ? ' / ピーク' + item.peakLabel : '') : ''}">
-          ${esc(item.label || '?')}${elevItemQtyLabel(item)}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
+        ${row.items.map((item, ii) => `<div class="shelf-item${item.jan ? ' placed' : ''}${isItemAtPeak(item) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'};flex:${item.span || 1};height:auto;min-height:36px;padding:2px" onclick="editItem('shelf',${ri},${ii})">
+          ${esc(item.label || '?')}${elevItemInfo(item)}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
           ${ii > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},-1)">◀</div>` : ''}
           ${ii < row.items.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},1)">▶</div>` : ''}
         </div>`).join('')}
@@ -2524,8 +2533,8 @@ function renderElevation() {
   } else {
     if (!elev.hooks) elev.hooks = [];
     container.innerHTML = `<div class="hook-view">
-      ${elev.hooks.map((item, i) => `<div class="hook-item${item.jan ? ' placed' : ''}${isItemAtPeak(elev.hooks[i]) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' + (item.peakLabel ? ' / ピーク' + item.peakLabel : '') : ''}">
-        ${esc(item.label || '?')}${elevItemQtyLabel(elev.hooks[i])}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
+      ${elev.hooks.map((item, i) => `<div class="hook-item${item.jan ? ' placed' : ''}${isItemAtPeak(elev.hooks[i]) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'};height:auto;min-height:60px;padding:4px" onclick="editItem('hook',0,${i})">
+        ${esc(item.label || '?')}${elevItemInfo(elev.hooks[i])}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
         ${i > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('hook',0,${i},-1)">◀</div>` : ''}
         ${i < elev.hooks.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('hook',0,${i},1)">▶</div>` : ''}
       </div>`).join('')}
