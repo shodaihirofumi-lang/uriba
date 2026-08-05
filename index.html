@@ -100,6 +100,9 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .fixture.selected .resize-handle { display: block; }
 .fixture .elev-btn { position: absolute; top: -1px; right: -1px; background: rgba(0,0,0,.65); color: #fff; border-radius: 0 4px 0 6px; padding: 3px 8px; font-size: 10px; font-weight: 600; display: none; cursor: pointer; z-index: 12; }
 .fixture:hover .elev-btn, .fixture.selected .elev-btn { display: block; }
+/* timeline peak highlight: fixture holds a product at its weekly sales peak on the selected date */
+.fixture.peak-active { border-color: var(--danger) !important; border-width: 3px !important; box-shadow: 0 0 0 3px rgba(224,49,49,.35); animation: peakPulse 1s ease-in-out infinite; z-index: 8; }
+@keyframes peakPulse { 0%,100% { box-shadow: 0 0 0 2px rgba(224,49,49,.3); } 50% { box-shadow: 0 0 0 7px rgba(224,49,49,.15); } }
 
 /* annotations */
 .anno { position: absolute; z-index: 1; pointer-events: none; }
@@ -115,6 +118,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 /* side panel */
 .side-panel { width: 300px; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
 .panel-toggle { display: none; }
+.panel-fab { display: none; position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 900; background: var(--primary); color: #fff; border-radius: 22px; padding: 10px 16px; font-size: 13px; font-weight: 700; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
 .panel-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .panel-section h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
 .panel-section h4 button { font-size: 14px; color: var(--primary); }
@@ -149,7 +153,9 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .shelf-view { border: 2px solid #adb5bd; border-radius: 6px; padding: 8px; min-height: 200px; }
 .shelf-row { display: flex; gap: 4px; padding: 8px 4px; border-bottom: 3px solid #adb5bd; min-height: 44px; align-items: stretch; flex-wrap: wrap; }
 .shelf-row:last-child { border-bottom: none; }
-.shelf-item { min-width: 50px; flex: 1; max-width: 150px; height: 36px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; border: 1px solid rgba(0,0,0,.12); cursor: pointer; position: relative; }
+.shelf-item { min-width: 50px; flex: 1; max-width: 150px; height: 36px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; border: 1px solid rgba(0,0,0,.12); cursor: pointer; position: relative; }
+/* products chosen from the catalog: darker, bolder so they stand out from placeholders */
+.shelf-item.placed, .hook-item.placed { border: 2px solid rgba(0,0,0,.5); font-weight: 700; color: #111; box-shadow: inset 0 0 0 100px rgba(0,0,0,.10); }
 .shelf-item .del-x { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff; border-radius: 50%; width: 14px; height: 14px; font-size: 9px; display: none; align-items: center; justify-content: center; cursor: pointer; }
 .shelf-item:hover .del-x { display: flex; }
 .shelf-item .move-btn { position: absolute; bottom: -6px; background: var(--primary); color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 3; line-height: 1; }
@@ -203,9 +209,10 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   .tool-btn .tip { display: none !important; }
   .canvas-wrap { flex: 1; min-height: 300px; }
   .floor { margin: 10px; }
-  .side-panel { width: 100%; max-height: 40vh; border-left: none; border-top: 1px solid var(--border); }
-  .side-panel.collapsed { max-height: 36px; overflow: hidden; }
-  .panel-toggle { display: flex; align-items: center; justify-content: center; padding: 8px; font-size: 12px; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 1px solid var(--border); }
+  .side-panel { width: 100%; max-height: 45vh; border-left: none; border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); }
+  .side-panel.collapsed { max-height: 0; overflow: hidden; border-top: none; padding: 0; }
+  .panel-toggle { display: flex; align-items: center; justify-content: center; padding: 10px; min-height: 44px; font-size: 13px; font-weight: 700; color: var(--primary); cursor: pointer; border-bottom: 1px solid var(--border); background: var(--primary-light); }
+  .panel-fab.show { display: block; }
   .suggest-box { margin: 6px 8px; padding: 6px; }
   .modal { width: 95vw !important; max-height: 85vh; }
   .elev-editor { min-width: auto; }
@@ -310,7 +317,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     </div>
 
     <div class="side-panel" id="sidePanel">
-      <div class="panel-toggle" onclick="document.getElementById('sidePanel').classList.toggle('collapsed')">▼ 企画パネル</div>
+      <div class="panel-toggle" onclick="togglePanel()" id="panelToggle">▼ 企画パネルを隠す</div>
       <div class="panel-section">
         <h4>企画リスト <button onclick="showProjectModal()">＋</button> <button onclick="showPasteModal()" style="font-size:11px;padding:2px 8px;background:var(--primary-light);color:var(--primary);border-radius:4px;font-weight:600">貼付</button> <button onclick="bulkDeleteDaiso()" style="font-size:11px;padding:2px 8px;background:#fff0f0;color:var(--danger);border-radius:4px;font-weight:600">一括取消</button></h4>
       </div>
@@ -325,6 +332,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
         <button onclick="undoAction()" style="margin-top:8px;width:100%;padding:8px;background:var(--surface);border:2px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">↩ 元に戻す</button>
       </div>
     </div>
+    <button class="panel-fab" id="panelFab" onclick="togglePanel()">企画リスト ▲</button>
   </div>
 </div>
 
@@ -376,6 +384,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
         <select id="fxPriority"><option value="high">高（入口近く等）</option><option value="mid">中</option><option value="low">低</option></select>
       </div>
       <div class="form-group"><label>紐付け企画</label><select id="fxProject"><option value="">（なし）</option></select></div>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:4px;border-color:var(--primary);color:var(--primary)" onclick="openElevationFromModal()">🗄 正面図を編集</button>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="btn btn-outline" onclick="closeModal('fixtureModal')">キャンセル</button>
         <button class="btn btn-primary" onclick="saveFixture()">保存</button>
@@ -607,6 +616,31 @@ function fmtMonth(d) {
   return `${dt.getMonth()+1}月`;
 }
 
+// ── Retail week calendar ──
+// Anchor from the ranking CSV's 集計期間: 2025年07週 = 2025/04/14 (Monday).
+// Weeks are Mon–Sun; ~52 weeks/year. Used to turn "2025年30週" into real dates.
+function retailWeekMonday(year, week) {
+  const d = new Date(2025, 3, 14); // 2025-04-14 local midnight
+  const weeks = (year - 2025) * 52 + (week - 7);
+  d.setDate(d.getDate() + weeks * 7);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function retailWeekRange(year, week) {
+  const start = retailWeekMonday(year, week);
+  const end = new Date(start.getTime());
+  end.setDate(end.getDate() + 6);
+  return { start, end };
+}
+function fmtMD(d) { return `${d.getMonth() + 1}/${d.getDate()}`; }
+function fmtWeekRange(year, week) {
+  const r = retailWeekRange(year, week);
+  // use the start date's real calendar year (week numbering can cross into the next year)
+  return `${r.start.getFullYear()}/${fmtMD(r.start)}〜${fmtMD(r.end)}`;
+}
+function dayStart(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
+function isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
 // ════════════════════════════════════════
 // PERSISTENCE
 // ════════════════════════════════════════
@@ -830,21 +864,21 @@ function submitLogin() {
   }
 }
 
+let adminUsers = {};
 function showAdminPanel() {
   if (!isAdmin() || !fbDb) return;
   fbDb.ref('users_meta').once('value').then(snap => {
-    const users = snap.val() || {};
+    adminUsers = snap.val() || {};
     let html = '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-    html += '<tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">ID</th><th style="padding:6px">登録日</th><th style="padding:6px">最終利用</th><th style="padding:6px">状態</th></tr>';
-    Object.entries(users).forEach(([uid, u]) => {
+    html += '<tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">ID</th><th style="padding:6px">最終利用</th><th style="padding:6px">データ</th><th style="padding:6px">状態</th></tr>';
+    Object.entries(adminUsers).forEach(([uid, u]) => {
       const active = !u.disabled;
-      const regDate = u.registeredAt ? fmtDate(u.registeredAt) : '—';
       const lastDate = u.lastActive ? fmtDate(u.lastActive) : '—';
       const isAdm = ADMIN_IDS.includes(u.loginId);
       html += `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:6px;font-weight:600">${esc(u.loginId || uid)}${isAdm ? ' (管理者)' : ''}</td>
-        <td style="padding:6px;text-align:center">${regDate}</td>
-        <td style="padding:6px;text-align:center">${lastDate}</td>
+        <td style="padding:6px;text-align:center;font-size:11px">${lastDate}</td>
+        <td style="padding:6px;text-align:center"><button class="btn btn-outline" style="font-size:11px;padding:2px 10px" onclick="adminShowUserLayouts('${uid}')">見る</button></td>
         <td style="padding:6px;text-align:center">${isAdm ? '—' :
           `<button class="btn ${active ? 'btn-outline' : 'btn-primary'}" style="font-size:11px;padding:2px 10px" onclick="toggleUserDisabled('${uid}',${active})">${active ? '無効化' : '有効化'}</button>`
         }</td></tr>`;
@@ -853,6 +887,84 @@ function showAdminPanel() {
     document.getElementById('adminContent').innerHTML = html;
     openModal('adminModal');
   });
+}
+
+function adminUserOptions(selectedUid) {
+  return Object.entries(adminUsers).map(([uid, u]) =>
+    `<option value="${uid}" ${uid === selectedUid ? 'selected' : ''}>${esc(u.loginId || uid)}</option>`
+  ).join('');
+}
+
+// Admin: browse another login's layouts, import a copy to inspect, or copy one to a different login.
+function adminShowUserLayouts(uid) {
+  if (!isAdmin() || !fbDb) return;
+  const loginId = (adminUsers[uid] && adminUsers[uid].loginId) || uid;
+  fbDb.ref('users/' + uid + '/layouts').once('value').then(snap => {
+    const raw = snap.val();
+    const layouts = !raw ? [] : (Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw));
+    let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <button class="btn btn-outline" style="font-size:12px;padding:3px 10px" onclick="showAdminPanel()">← 一覧へ</button>
+      <b style="font-size:14px">${esc(loginId)} のデータ（${layouts.length}件）</b></div>`;
+    if (layouts.length === 0) {
+      html += '<div style="color:#adb5bd;padding:12px;text-align:center">データがありません</div>';
+    } else {
+      html += layouts.map((l, i) => `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><b>${esc(l.name || '無題')}</b> <span style="font-size:11px;color:var(--text3)">${esc(l.store || '')} / 更新:${l.updatedAt ? fmtDate(l.updatedAt) : '—'}</span></div>
+          <button class="btn btn-outline" style="font-size:11px;padding:2px 8px" onclick="adminImportLayout('${uid}',${i})">自分のギャラリーに複製</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:12px">
+          <span style="color:var(--text3)">別ログインへコピー:</span>
+          <select id="adminCopyTo_${i}" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:5px;font-size:12px">${adminUserOptions()}</select>
+          <button class="btn btn-primary" style="font-size:11px;padding:3px 10px" onclick="adminCopyLayout('${uid}',${i})">コピー</button>
+        </div>
+      </div>`).join('');
+    }
+    document.getElementById('adminContent').innerHTML = html;
+    editorState.adminViewingUid = uid;
+    editorState.adminViewingLayouts = layouts;
+  });
+}
+
+// Copy a layout from one login to another (admin only). Requires DB rules to allow admin writes.
+function adminCopyLayout(fromUid, idx) {
+  if (!isAdmin() || !fbDb) return;
+  const layouts = editorState.adminViewingLayouts || [];
+  const src = layouts[idx];
+  if (!src) return;
+  const toUid = document.getElementById('adminCopyTo_' + idx).value;
+  if (!toUid) return;
+  const toName = (adminUsers[toUid] && adminUsers[toUid].loginId) || toUid;
+  if (!confirm(`「${src.name || '無題'}」を「${toName}」のデータにコピーします。よろしいですか？`)) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  copy.updatedAt = new Date().toISOString();
+  const ref = fbDb.ref('users/' + toUid + '/layouts');
+  ref.once('value').then(snap => {
+    const raw = snap.val();
+    const arr = !raw ? [] : (Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw));
+    arr.push(copy);
+    return ref.set(arr);
+  }).then(() => {
+    showToast(`「${toName}」にコピーしました`);
+  }).catch(e => {
+    alert('コピーに失敗しました（データベースの権限設定が必要かもしれません）: ' + e.message);
+  });
+}
+
+// Import another login's layout into the admin's own gallery to inspect it.
+function adminImportLayout(fromUid, idx) {
+  const layouts = editorState.adminViewingLayouts || [];
+  const src = layouts[idx];
+  if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid();
+  copy.name = (copy.name || '無題') + '（複製）';
+  copy.updatedAt = new Date().toISOString();
+  state.layouts.push(copy);
+  saveState();
+  renderGallery();
+  showToast('自分のギャラリーに複製しました');
 }
 
 function toggleUserDisabled(uid, currentlyActive) {
@@ -1060,6 +1172,18 @@ function backToGallery() {
   renderGallery();
 }
 
+// Show/hide the project panel on mobile. When hidden, a floating button
+// (panelFab) stays visible so it can always be reopened, even if the browser's
+// bottom bar would otherwise cover the panel's own toggle.
+function togglePanel() {
+  const p = document.getElementById('sidePanel');
+  const fab = document.getElementById('panelFab');
+  const toggle = document.getElementById('panelToggle');
+  const collapsed = p.classList.toggle('collapsed');
+  if (fab) fab.classList.toggle('show', collapsed);
+  if (toggle) toggle.textContent = '▼ 企画パネルを隠す';
+}
+
 function initEditor() {
   const ly = currentLayout();
   if (!ly) return;
@@ -1186,6 +1310,25 @@ function updateSliderLabel() {
   filterByDate(d);
 }
 
+function fixtureElevItems(f) {
+  const items = [];
+  if (!f.elevation) return items;
+  if (f.elevation.rows) f.elevation.rows.forEach(r => (r.items || []).forEach(it => items.push(it)));
+  if (f.elevation.hooks) f.elevation.hooks.forEach(it => items.push(it));
+  return items;
+}
+
+// Which placed products are at their weekly sales peak on the given date?
+// Compared by month/day (year-agnostic) since the sales data is from last year.
+function fixturePeakItems(f, date) {
+  const cur = (date.getMonth() + 1) * 100 + date.getDate();
+  return fixtureElevItems(f).filter(it => {
+    if (!it.peakStartMD || !it.peakEndMD) return false;
+    const s = it.peakStartMD, e = it.peakEndMD;
+    return s <= e ? (cur >= s && cur <= e) : (cur >= s || cur <= e);
+  });
+}
+
 function filterByDate(date) {
   const md = monthData();
   if (!md) return;
@@ -1202,6 +1345,14 @@ function filterByDate(date) {
         el.style.opacity = visible ? '1' : '0.2';
         el.style.borderStyle = visible ? 'solid' : 'dashed';
       }
+    }
+    // highlight fixtures whose placed products hit their sales peak this week
+    const peaks = fixturePeakItems(f, date);
+    if (peaks.length) {
+      el.classList.add('peak-active');
+      el.title = 'ピーク: ' + peaks.map(p => (p.label || p.jan) + (p.peakLabel ? '（' + p.peakLabel + '）' : '')).join(', ');
+    } else {
+      el.classList.remove('peak-active');
     }
   });
 }
@@ -1794,6 +1945,13 @@ function saveFixture() {
   showToast('保存しました');
 }
 
+// open the elevation editor straight from the fixture modal (reliable on mobile — a tap always works)
+function openElevationFromModal() {
+  const fxId = editorState.editingFixtureId;
+  saveFixture();
+  if (fxId) openElevation(fxId);
+}
+
 function syncProjectColorToFixtures(projectId, color) {
   const ly = currentLayout();
   if (!ly) return;
@@ -2081,17 +2239,22 @@ function showCatalogView(projId, catName) {
   // year-boundary index (first week whose year differs from previous)
   let boundaryIdx = -1;
   for (let i = 1; i < weeks.length; i++) { if (weeks[i].year !== weeks[i - 1].year) { boundaryIdx = i; break; } }
-  const firstLbl = weeks[0].label, lastLbl = weeks[weeks.length - 1].label;
+  const firstRange = fmtWeekRange(weeks[0].year, weeks[0].week);
+  const lastRange = fmtWeekRange(weeks[weeks.length - 1].year, weeks[weeks.length - 1].week);
 
   el.innerHTML = `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">期間: ${esc(firstLbl)} 〜 ${esc(lastLbl)}${boundaryIdx >= 0 ? '（点線＝年の変わり目）' : ''}　／　棒は各週の売れ数（最大${gMax}）</div>
+    <div id="catReadout" style="position:sticky;top:0;background:var(--primary-light);border:1px solid var(--primary);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--primary);font-weight:600;margin-bottom:8px;z-index:5">棒グラフをタップすると、その週の日付と売れ数が表示されます</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">期間: ${esc(firstRange)} 〜 ${esc(lastRange)}${boundaryIdx >= 0 ? '　（赤い点線＝年の変わり目）' : ''}</div>
     ${items.map((it, i) => {
       const peak = Math.max(...it.weeks.map(w => w.qty));
+      const peakW = it.weeks.find(w => w.qty === peak && w.qty > 0);
+      const peakTxt = peakW ? 'ピーク ' + fmtWeekRange(peakW.year, peakW.week) : '';
       const bars = it.weeks.map((w, wi) => {
         const h = w.qty > 0 ? Math.max(2, Math.round(w.qty / gMax * 34)) : 0;
         const bl = (boundaryIdx === wi) ? 'border-left:1px dashed var(--danger);padding-left:1px' : '';
         const isPeak = w.qty === peak && w.qty > 0;
-        return `<div title="${esc(w.label)}: ${w.qty}個" style="flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:38px;${bl}">
+        const info = `${fmtWeekRange(w.year, w.week)}（${w.year}年${w.week}週）: ${w.qty}個`;
+        return `<div title="${esc(info)}" onclick="document.getElementById('catReadout').textContent='${esc(it.name)}　'+${JSON.stringify(info)}" style="flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:38px;cursor:pointer;${bl}">
           <div style="width:100%;max-width:10px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:1px 1px 0 0"></div>
         </div>`;
       }).join('');
@@ -2099,13 +2262,16 @@ function showCatalogView(projId, catName) {
         <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:2px">
           <span style="color:#adb5bd;font-size:11px;width:22px;text-align:right">${i + 1}</span>
           <b style="font-size:12px;flex:1">${esc(it.name)}</b>
-          <span style="font-size:10px;color:var(--text3)">${esc(it.jan)}</span>
           <span style="font-weight:700;color:var(--primary);font-size:13px">計${it.sales}</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px;padding-left:28px;margin-bottom:1px">
+          <span style="font-size:10px;color:var(--text3)">${esc(it.jan)}</span>
+          <span style="font-size:10px;color:var(--danger)">${esc(peakTxt)}</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:1px;padding-left:28px">${bars}</div>
       </div>`;
     }).join('')}
-    <div style="display:flex;padding-left:28px;margin-top:2px"><span style="flex:1;font-size:9px;color:#adb5bd">${esc(firstLbl)}</span><span style="font-size:9px;color:#adb5bd">${esc(lastLbl)}</span></div>`;
+    <div style="display:flex;padding-left:28px;margin-top:2px"><span style="flex:1;font-size:9px;color:#adb5bd">${esc(firstRange)}</span><span style="font-size:9px;color:#adb5bd">${esc(lastRange)}</span></div>`;
   openModal('catalogModal');
 }
 
@@ -2126,8 +2292,8 @@ function getCatalogForCategory(catName) {
 function onItemCatalogSelect() {
   const sel = document.getElementById('itemCatalogSel');
   if (!sel.value) return;
-  const parts = sel.value.split('|');
-  document.getElementById('itemLabel').value = parts[0] || '';
+  const it = lookupCatalogItem(sel.value);
+  if (it) document.getElementById('itemLabel').value = it.name || '';
 }
 
 function deleteProject() {
@@ -2293,7 +2459,7 @@ function renderElevation() {
     container.innerHTML = `<div class="shelf-view">
       ${elev.rows.map((row, ri) => `<div class="shelf-row" style="position:relative">
         ${elev.rows.length > 1 ? `<div style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:4" onclick="removeShelfRow(${ri})">×</div>` : ''}
-        ${row.items.map((item, ii) => `<div class="shelf-item" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' : ''}">
+        ${row.items.map((item, ii) => `<div class="shelf-item${item.jan ? ' placed' : ''}" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' + (item.peakLabel ? ' / ピーク' + item.peakLabel : '') : ''}">
           ${esc(item.label || '?')}${item.sales ? '<span style="font-size:8px;opacity:.6;display:block;line-height:1">'+item.sales+'</span>' : ''}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
           ${ii > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},-1)">◀</div>` : ''}
           ${ii < row.items.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},1)">▶</div>` : ''}
@@ -2305,7 +2471,7 @@ function renderElevation() {
   } else {
     if (!elev.hooks) elev.hooks = [];
     container.innerHTML = `<div class="hook-view">
-      ${elev.hooks.map((item, i) => `<div class="hook-item" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' : ''}">
+      ${elev.hooks.map((item, i) => `<div class="hook-item${item.jan ? ' placed' : ''}" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' + (item.peakLabel ? ' / ピーク' + item.peakLabel : '') : ''}">
         ${esc(item.label || '?')}${item.sales ? '<span style="font-size:8px;opacity:.6;display:block;line-height:1">'+item.sales+'</span>' : ''}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
         ${i > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('hook',0,${i},-1)">◀</div>` : ''}
         ${i < elev.hooks.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('hook',0,${i},1)">▶</div>` : ''}
@@ -2327,18 +2493,41 @@ function removeShelfRow(rowIdx) {
   renderElevation();
 }
 
+// All catalog items belonging to a fixture: only from its LINKED project's
+// categories (so unrelated categories don't flood the list).
+function fixtureCatalogItems(f) {
+  const ly = currentLayout();
+  if (!ly || !f) return [];
+  const all = [];
+  const push = it => { if (!all.find(a => a.jan === it.jan)) all.push(it); };
+  if (f.projectId) {
+    const proj = ly.projects.find(p => p.id === f.projectId);
+    if (proj && proj.catalog) Object.values(proj.catalog).forEach(list => list.forEach(push));
+  } else if (f.category) {
+    // no linked project: fall back to same-named category across projects
+    getCatalogForCategory(f.category).forEach(push);
+  }
+  return all.sort((a, b) => b.sales - a.sales);
+}
+
 function populateItemCatalog() {
   const md = monthData();
   const fxId = editorState.currentElevFixtureId;
   const f = md ? md.fixtures.find(x => x.id === fxId) : null;
   const grp = document.getElementById('itemCatalogGroup');
   const sel = document.getElementById('itemCatalogSel');
-  if (!f || !f.category) { grp.style.display = 'none'; return; }
-  const items = getCatalogForCategory(f.category);
+  const items = fixtureCatalogItems(f);
   if (items.length === 0) { grp.style.display = 'none'; return; }
   grp.style.display = '';
   sel.innerHTML = '<option value="">(選択してください)</option>' +
-    items.map(it => `<option value="${esc(it.name)}|${esc(it.jan)}|${it.sales}">${esc(it.jan)} / ${esc(it.name)} / ${it.sales}個</option>`).join('');
+    items.map(it => `<option value="${esc(it.jan)}">${esc(it.jan)} / ${esc(it.name)} / ${it.sales}個</option>`).join('');
+}
+
+// Look up a full catalog item (with weekly data) by JAN for the current fixture
+function lookupCatalogItem(jan) {
+  const md = monthData();
+  const f = md ? md.fixtures.find(x => x.id === editorState.currentElevFixtureId) : null;
+  return fixtureCatalogItems(f).find(it => it.jan === jan) || null;
 }
 
 function addItem(mode, rowIdx) {
@@ -2376,9 +2565,23 @@ function saveItem() {
     span: parseInt(document.getElementById('itemSpan').value) || 1
   };
   if (catSel) {
-    const parts = catSel.split('|');
-    data.jan = parts[1] || '';
-    data.sales = parseInt(parts[2]) || 0;
+    const it = lookupCatalogItem(catSel);
+    if (it) {
+      data.jan = it.jan;
+      data.sales = it.sales || 0;
+      // record the peak week so the timeline slider can highlight the fixture.
+      // The data is LAST year's weeks, so we match by month/day (year-agnostic):
+      // last year's late-Sep peak lights up when this year's slider reaches late Sep.
+      if (Array.isArray(it.weeks) && it.weeks.length) {
+        const peak = it.weeks.reduce((a, b) => (b.qty > a.qty ? b : a), it.weeks[0]);
+        if (peak && peak.qty > 0) {
+          const r = retailWeekRange(peak.year, peak.week);
+          data.peakStartMD = (r.start.getMonth() + 1) * 100 + r.start.getDate();
+          data.peakEndMD = (r.end.getMonth() + 1) * 100 + r.end.getDate();
+          data.peakLabel = fmtWeekRange(peak.year, peak.week);
+        }
+      }
+    }
   }
 
   if (info.mode === 'shelf') {
@@ -2661,8 +2864,14 @@ document.getElementById('galleryFilter').addEventListener('input', renderGallery
 initFirebaseAuth();
 
 
-// auto-assign priority when annotations change
+// re-apply the timeline slider's date filter (opacity + peak highlight) after every floor render
 const origRenderFloor = renderFloor;
+renderFloor = function () {
+  origRenderFloor.apply(this, arguments);
+  const slider = document.getElementById('dateSlider');
+  const ly = currentLayout();
+  if (slider && ly) filterByDate(dayToDate(parseInt(slider.value), ly.fiscalStart));
+};
 </script>
 </body>
 </html>
