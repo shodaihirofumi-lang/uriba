@@ -2460,16 +2460,47 @@ function setElevType(type) {
   renderElevation();
 }
 
+function elevSliderDate() {
+  const ly = currentLayout();
+  if (!ly) return null;
+  const slider = document.getElementById('dateSlider');
+  if (!slider) return null;
+  return dayToDate(parseInt(slider.value), ly.fiscalStart);
+}
+
 function isItemAtPeak(item) {
   if (!item.peakStartMD || !item.peakEndMD) return false;
-  const ly = currentLayout();
-  if (!ly) return false;
-  const slider = document.getElementById('dateSlider');
-  if (!slider) return false;
-  const date = dayToDate(parseInt(slider.value), ly.fiscalStart);
+  const date = elevSliderDate();
+  if (!date) return false;
   const cur = (date.getMonth() + 1) * 100 + date.getDate();
   const s = item.peakStartMD, e = item.peakEndMD;
   return s <= e ? (cur >= s && cur <= e) : (cur >= s || cur <= e);
+}
+
+function itemWeekQty(item) {
+  let weeks = item.weeks;
+  if ((!Array.isArray(weeks) || !weeks.length) && item.jan) {
+    const cat = lookupCatalogItem(item.jan);
+    if (cat && Array.isArray(cat.weeks)) weeks = cat.weeks;
+  }
+  if (!Array.isArray(weeks) || !weeks.length) return null;
+  const date = elevSliderDate();
+  if (!date) return null;
+  const curMD = (date.getMonth() + 1) * 100 + date.getDate();
+  for (const w of weeks) {
+    const r = retailWeekRange(w.year, w.week);
+    const sMD = (r.start.getMonth() + 1) * 100 + r.start.getDate();
+    const eMD = (r.end.getMonth() + 1) * 100 + r.end.getDate();
+    if (sMD <= eMD ? (curMD >= sMD && curMD <= eMD) : (curMD >= sMD || curMD <= eMD)) return w.qty;
+  }
+  return null;
+}
+
+function elevItemQtyLabel(item) {
+  const wq = itemWeekQty(item);
+  if (wq !== null) return `<span style="font-size:8px;opacity:.6;display:block;line-height:1">${wq}個/週</span>`;
+  if (item.sales) return `<span style="font-size:8px;opacity:.6;display:block;line-height:1">${item.sales}</span>`;
+  return '';
 }
 
 function renderElevation() {
@@ -2482,7 +2513,7 @@ function renderElevation() {
       ${elev.rows.map((row, ri) => `<div class="shelf-row" style="position:relative">
         ${elev.rows.length > 1 ? `<div style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:4" onclick="removeShelfRow(${ri})">×</div>` : ''}
         ${row.items.map((item, ii) => `<div class="shelf-item${item.jan ? ' placed' : ''}${isItemAtPeak(item) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'};flex:${item.span || 1}" onclick="editItem('shelf',${ri},${ii})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' + (item.peakLabel ? ' / ピーク' + item.peakLabel : '') : ''}">
-          ${esc(item.label || '?')}${item.sales ? '<span style="font-size:8px;opacity:.6;display:block;line-height:1">'+item.sales+'</span>' : ''}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
+          ${esc(item.label || '?')}${elevItemQtyLabel(item)}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
           ${ii > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},-1)">◀</div>` : ''}
           ${ii < row.items.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},1)">▶</div>` : ''}
         </div>`).join('')}
@@ -2494,7 +2525,7 @@ function renderElevation() {
     if (!elev.hooks) elev.hooks = [];
     container.innerHTML = `<div class="hook-view">
       ${elev.hooks.map((item, i) => `<div class="hook-item${item.jan ? ' placed' : ''}${isItemAtPeak(elev.hooks[i]) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'}" onclick="editItem('hook',0,${i})" title="${item.jan ? item.jan + ' / ' + (item.sales || 0) + '個' + (item.peakLabel ? ' / ピーク' + item.peakLabel : '') : ''}">
-        ${esc(item.label || '?')}${item.sales ? '<span style="font-size:8px;opacity:.6;display:block;line-height:1">'+item.sales+'</span>' : ''}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
+        ${esc(item.label || '?')}${elevItemQtyLabel(elev.hooks[i])}<div class="del-x" onclick="event.stopPropagation();removeItem('hook',0,${i})">×</div>
         ${i > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('hook',0,${i},-1)">◀</div>` : ''}
         ${i < elev.hooks.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('hook',0,${i},1)">▶</div>` : ''}
       </div>`).join('')}
@@ -2595,6 +2626,7 @@ function saveItem() {
       // The data is LAST year's weeks, so we match by month/day (year-agnostic):
       // last year's late-Sep peak lights up when this year's slider reaches late Sep.
       if (Array.isArray(it.weeks) && it.weeks.length) {
+        data.weeks = it.weeks;
         const peak = it.weeks.reduce((a, b) => (b.qty > a.qty ? b : a), it.weeks[0]);
         if (peak && peak.qty > 0) {
           const r = retailWeekRange(peak.year, peak.week);
