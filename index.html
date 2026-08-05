@@ -461,7 +461,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   <div class="modal" style="width:520px">
     <div class="modal-header"><h3 id="csvCatTitle">CSV貼付</h3><button class="modal-close" onclick="closeModal('csvCatModal')">&times;</button></div>
     <div class="modal-body">
-      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">CSV貼付シートのデータ（ヘッダー行含む）をExcelからコピーして貼り付けてください</p>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">CSVデータ（ヘッダー行含む）をExcelからコピーして貼り付けてください。<br>・ダイソー: 売れ数ランキング形式　・ホームセンター: 週ごとの売上履歴形式（週次グラフ表示）</p>
       <textarea id="csvCatArea" rows="6" style="width:100%;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:8px;resize:vertical" placeholder="Excelからコピーした行をここに貼り付け"></textarea>
       <div id="csvCatPreview" style="margin-top:8px;font-size:11px;max-height:180px;overflow-y:auto"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
@@ -613,10 +613,16 @@ function fmtMonth(d) {
 let cloudSyncing = false;
 let ignoreNextFbUpdate = false;
 
+// Each login (and the logged-out "anon" state) keeps its own local data,
+// so a different login never sees data created under another login.
+function stateKey() {
+  return 'uriba_state_' + (currentUser ? currentUser.uid : 'anon');
+}
+
 function saveState() {
   const ly = currentLayout();
   if (ly) ly.updatedAt = new Date().toISOString();
-  try { localStorage.setItem('uriba_state', JSON.stringify(state)); } catch(e) {}
+  try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch(e) {}
   if (cloudSyncing && fbRef) {
     ignoreNextFbUpdate = true;
     fbRef.set(JSON.parse(JSON.stringify(state.layouts))).catch(e => {
@@ -641,10 +647,17 @@ function showToast(msg, isError) {
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 1500);
 }
 function loadState() {
-  try {
-    const s = localStorage.getItem('uriba_state');
-    if (s) { state = JSON.parse(s); }
-  } catch(e) {}
+  let s = null;
+  try { s = localStorage.getItem(stateKey()); } catch(e) {}
+  // one-time migration: adopt the old shared key as the anon store
+  if (!s && !currentUser) {
+    try { s = localStorage.getItem('uriba_state'); } catch(e) {}
+  }
+  if (s) {
+    try { state = JSON.parse(s); } catch(e) { state = { layouts: [], currentLayoutId: null, view: 'gallery' }; }
+  } else {
+    state = { layouts: [], currentLayoutId: null, view: 'gallery' };
+  }
 }
 
 function exportLayout() {
@@ -702,6 +715,15 @@ function isAdmin() {
   return currentUser && ADMIN_IDS.includes(getLoginId(currentUser));
 }
 
+function switchToGallery() {
+  state.view = 'gallery';
+  state.currentLayoutId = null;
+  const ed = document.getElementById('editor'), ga = document.getElementById('gallery');
+  if (ed) ed.classList.remove('active');
+  if (ga) ga.classList.add('active');
+  renderGallery();
+}
+
 function initFirebaseAuth() {
   if (!fbApp) return;
   firebase.auth(fbApp).onAuthStateChanged(user => {
@@ -719,10 +741,16 @@ function initFirebaseAuth() {
           firebase.auth(fbApp).signOut();
           return;
         }
+        // load only THIS login's local data (never carry over another login's), then sync cloud
+        loadState();
+        switchToGallery();
         startUserSync(user.uid);
       });
     } else {
       stopSync();
+      // back to the anonymous (logged-out) local data
+      loadState();
+      switchToGallery();
     }
   });
 }
@@ -880,7 +908,7 @@ function mergeLayouts(remoteLayouts) {
   });
   state.layouts.forEach(l => { if (!seen[l.id]) merged.push(l); });
   state.layouts = merged;
-  try { localStorage.setItem('uriba_state', JSON.stringify(state)); } catch(e) {}
+  try { localStorage.setItem(stateKey(), JSON.stringify(state)); } catch(e) {}
   if (state.view === 'gallery') renderGallery();
 }
 
@@ -1914,10 +1942,53 @@ function openCsvCatPaste(catName) {
 }
 
 function previewCsvCat() {
-  const items = parseCsvRanking(document.getElementById('csvCatArea').value);
+  const res = parseCatalogCsv(document.getElementById('csvCatArea').value);
+  const items = res.items;
   const el = document.getElementById('csvCatPreview');
   if (items.length === 0) { el.innerHTML = ''; return; }
-  el.innerHTML = `<b>${items.length}件検出</b><table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px"><tr style="background:#f1f3f5"><th style="padding:2px 4px;text-align:left">JAN</th><th style="text-align:left">商品名</th><th style="text-align:right">売上数</th></tr>${items.slice(0,20).map(it => `<tr><td style="padding:2px 4px">${esc(it.jan)}</td><td>${esc(it.name)}</td><td style="text-align:right">${it.sales}</td></tr>`).join('')}${items.length > 20 ? '<tr><td colspan="3" style="text-align:center;color:#adb5bd">...他' + (items.length - 20) + '件</td></tr>' : ''}</table>`;
+  const weekNote = res.weekly ? `<span style="color:var(--primary)">（週次データ ${res.weekLabels.length}週分を検出）</span>` : '';
+  el.innerHTML = `<b>${items.length}件検出</b> ${weekNote}<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px"><tr style="background:#f1f3f5"><th style="padding:2px 4px;text-align:left">JAN</th><th style="text-align:left">商品名</th><th style="text-align:right">${res.weekly ? '合計' : '売上数'}</th></tr>${items.slice(0,20).map(it => `<tr><td style="padding:2px 4px">${esc(it.jan)}</td><td>${esc(it.name)}</td><td style="text-align:right">${it.sales}</td></tr>`).join('')}${items.length > 20 ? '<tr><td colspan="3" style="text-align:center;color:#adb5bd">...他' + (items.length - 20) + '件</td></tr>' : ''}</table>`;
+}
+
+// Weekly-history CSV (ホームセンター形式): 商品情報JAN + 売上履歴(数量)YYYY年WW週...
+function parseWeeklyCsv(text) {
+  const lines = text.split('\n');
+  const delim = text.includes('\t') ? '\t' : ',';
+  let headerIdx = -1, cols = null;
+  for (let li = 0; li < lines.length; li++) {
+    const c = lines[li].split(delim).map(x => x.trim());
+    const hasJan = c.some(x => x === '商品情報JAN' || x === 'JAN' || x === 'JANコード');
+    const hasWeek = c.some(x => /\d{4}年\s*\d{1,2}\s*週/.test(x));
+    if (hasJan && hasWeek) { headerIdx = li; cols = c; break; }
+  }
+  if (headerIdx < 0) return null;
+  const janCol = cols.findIndex(x => x === '商品情報JAN' || x === 'JAN' || x === 'JANコード');
+  let nameCol = cols.findIndex(x => x === '商品情報名称' || x === '商品名称' || x === '商品名');
+  if (nameCol < 0) nameCol = janCol + 1;
+  const weekCols = [];
+  cols.forEach((x, idx) => {
+    const m = x.match(/(\d{4})年\s*(\d{1,2})\s*週/);
+    if (m) weekCols.push({ idx, year: +m[1], week: +m[2], label: (m[1].slice(2)) + '年' + (+m[2]) + '週' });
+  });
+  if (weekCols.length === 0) return null;
+  const items = [];
+  for (let li = headerIdx + 1; li < lines.length; li++) {
+    const c = lines[li].split(delim);
+    const jan = (c[janCol] || '').trim();
+    if (!/^\d{8,13}$/.test(jan)) continue;
+    const name = (c[nameCol] || '').trim();
+    const weeks = weekCols.map(wc => ({ label: wc.label, year: wc.year, week: wc.week, qty: parseInt((c[wc.idx] || '').trim()) || 0 }));
+    const sales = weeks.reduce((s, w) => s + w.qty, 0);
+    items.push({ jan, name, sales, weeks });
+  }
+  return { items, weekLabels: weekCols.map(w => w.label) };
+}
+
+// Unified parse: try weekly format first, fall back to ranking format
+function parseCatalogCsv(text) {
+  const wk = parseWeeklyCsv(text);
+  if (wk && wk.items.length > 0) return { items: wk.items, weekly: true, weekLabels: wk.weekLabels };
+  return { items: parseCsvRanking(text), weekly: false, weekLabels: [] };
 }
 
 function parseCsvRanking(text) {
@@ -1967,7 +2038,8 @@ function parseCsvRanking(text) {
 }
 
 function importCsvCatalog() {
-  const items = parseCsvRanking(document.getElementById('csvCatArea').value);
+  const res = parseCatalogCsv(document.getElementById('csvCatArea').value);
+  const items = res.items;
   if (items.length === 0) { alert('データが認識できません'); return; }
   const catName = editorState.csvCatTarget;
   const projId = editorState.editingProjectId;
@@ -1976,10 +2048,12 @@ function importCsvCatalog() {
   if (!proj) { alert('企画が見つかりません'); return; }
   if (!proj.catalog) proj.catalog = {};
   proj.catalog[catName] = items.sort((a, b) => b.sales - a.sales);
+  if (!proj.catalogMeta) proj.catalogMeta = {};
+  proj.catalogMeta[catName] = { weekly: res.weekly, weekLabels: res.weekLabels || [] };
   closeModal('csvCatModal');
   renderPjCatTags();
   saveState();
-  showToast(items.length + '件のアイテムを登録しました');
+  showToast(items.length + '件のアイテムを登録しました' + (res.weekly ? '（週次）' : ''));
 }
 
 function showCatalogView(projId, catName) {
@@ -1990,8 +2064,48 @@ function showCatalogView(projId, catName) {
     return;
   }
   const items = proj.catalog[catName].sort((a, b) => b.sales - a.sales);
+  const isWeekly = items.length > 0 && Array.isArray(items[0].weeks) && items[0].weeks.length > 0;
   document.getElementById('catalogTitle').textContent = proj.name + ' / ' + catName + ' (' + items.length + '件)';
-  document.getElementById('catalogList').innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="background:#f1f3f5;position:sticky;top:0"><th style="padding:4px 6px;text-align:center;width:30px">#</th><th style="text-align:left">JAN</th><th style="text-align:left">商品名</th><th style="text-align:right;width:60px">売上数</th></tr>${items.map((it, i) => `<tr style="border-bottom:1px solid #eee"><td style="padding:4px 6px;text-align:center;color:#adb5bd">${i + 1}</td><td style="font-size:11px">${esc(it.jan)}</td><td>${esc(it.name)}</td><td style="text-align:right;font-weight:600">${it.sales}</td></tr>`).join('')}</table>`;
+  const el = document.getElementById('catalogList');
+
+  if (!isWeekly) {
+    el.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="background:#f1f3f5;position:sticky;top:0"><th style="padding:4px 6px;text-align:center;width:30px">#</th><th style="text-align:left">JAN</th><th style="text-align:left">商品名</th><th style="text-align:right;width:60px">売上数</th></tr>${items.map((it, i) => `<tr style="border-bottom:1px solid #eee"><td style="padding:4px 6px;text-align:center;color:#adb5bd">${i + 1}</td><td style="font-size:11px">${esc(it.jan)}</td><td>${esc(it.name)}</td><td style="text-align:right;font-weight:600">${it.sales}</td></tr>`).join('')}</table>`;
+    openModal('catalogModal');
+    return;
+  }
+
+  // Weekly view: bar chart per item, global max scale for comparability
+  const weeks = items[0].weeks;
+  let gMax = 1;
+  items.forEach(it => it.weeks.forEach(w => { if (w.qty > gMax) gMax = w.qty; }));
+  // year-boundary index (first week whose year differs from previous)
+  let boundaryIdx = -1;
+  for (let i = 1; i < weeks.length; i++) { if (weeks[i].year !== weeks[i - 1].year) { boundaryIdx = i; break; } }
+  const firstLbl = weeks[0].label, lastLbl = weeks[weeks.length - 1].label;
+
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">期間: ${esc(firstLbl)} 〜 ${esc(lastLbl)}${boundaryIdx >= 0 ? '（点線＝年の変わり目）' : ''}　／　棒は各週の売れ数（最大${gMax}）</div>
+    ${items.map((it, i) => {
+      const peak = Math.max(...it.weeks.map(w => w.qty));
+      const bars = it.weeks.map((w, wi) => {
+        const h = w.qty > 0 ? Math.max(2, Math.round(w.qty / gMax * 34)) : 0;
+        const bl = (boundaryIdx === wi) ? 'border-left:1px dashed var(--danger);padding-left:1px' : '';
+        const isPeak = w.qty === peak && w.qty > 0;
+        return `<div title="${esc(w.label)}: ${w.qty}個" style="flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:38px;${bl}">
+          <div style="width:100%;max-width:10px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:1px 1px 0 0"></div>
+        </div>`;
+      }).join('');
+      return `<div style="border-bottom:1px solid #eee;padding:6px 2px">
+        <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:2px">
+          <span style="color:#adb5bd;font-size:11px;width:22px;text-align:right">${i + 1}</span>
+          <b style="font-size:12px;flex:1">${esc(it.name)}</b>
+          <span style="font-size:10px;color:var(--text3)">${esc(it.jan)}</span>
+          <span style="font-weight:700;color:var(--primary);font-size:13px">計${it.sales}</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:1px;padding-left:28px">${bars}</div>
+      </div>`;
+    }).join('')}
+    <div style="display:flex;padding-left:28px;margin-top:2px"><span style="flex:1;font-size:9px;color:#adb5bd">${esc(firstLbl)}</span><span style="font-size:9px;color:#adb5bd">${esc(lastLbl)}</span></div>`;
   openModal('catalogModal');
 }
 
