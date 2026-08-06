@@ -2276,12 +2276,19 @@ function showCatalogView(projId, catName) {
   const weeks = items[0].weeks;
   let gMax = 1;
   items.forEach(it => it.weeks.forEach(w => { if (w.qty > gMax) gMax = w.qty; }));
-  // year-boundary index (first week whose year differs from previous)
   let boundaryIdx = -1;
   for (let i = 1; i < weeks.length; i++) { if (weeks[i].year !== weeks[i - 1].year) { boundaryIdx = i; break; } }
   const firstRange = fmtWeekRange(weeks[0].year, weeks[0].week);
   const lastRange = fmtWeekRange(weeks[weeks.length - 1].year, weeks[weeks.length - 1].week);
 
+  window._catBarData = [];
+  items.forEach(it => {
+    it.weeks.forEach(w => {
+      window._catBarData.push(it.name + '　' + fmtWeekRange(w.year, w.week) + '（' + w.year + '年' + w.week + '週）: ' + w.qty + '個');
+    });
+  });
+
+  let barIdx = 0;
   el.innerHTML = `
     <div id="catReadout" style="position:sticky;top:0;background:var(--primary-light);border:1px solid var(--primary);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--primary);font-weight:600;margin-bottom:8px;z-index:5">棒グラフをタップすると、その週の日付と売れ数が表示されます</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">期間: ${esc(firstRange)} 〜 ${esc(lastRange)}${boundaryIdx >= 0 ? '　（赤い点線＝年の変わり目）' : ''}</div>
@@ -2293,9 +2300,8 @@ function showCatalogView(projId, catName) {
         const h = w.qty > 0 ? Math.max(2, Math.round(w.qty / gMax * 34)) : 0;
         const bl = (boundaryIdx === wi) ? 'border-left:1px dashed var(--danger);padding-left:1px' : '';
         const isPeak = w.qty === peak && w.qty > 0;
-        const info = `${fmtWeekRange(w.year, w.week)}（${w.year}年${w.week}週）: ${w.qty}個`;
-        const tapJs = `event.stopPropagation();document.getElementById('catReadout').textContent='${esc(it.name)}　'+${JSON.stringify(info)}`;
-        return `<div onclick="${tapJs}" ontouchend="${tapJs}" style="flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:48px;cursor:pointer;padding-top:10px;${bl}">
+        const idx = barIdx++;
+        return `<div data-bar="${idx}" onclick="event.stopPropagation();document.getElementById('catReadout').textContent=window._catBarData[${idx}]" ontouchend="event.stopPropagation();document.getElementById('catReadout').textContent=window._catBarData[${idx}]" style="flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:48px;cursor:pointer;padding-top:10px;${bl}">
           <div style="width:100%;max-width:12px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:1px 1px 0 0;pointer-events:none"></div>
         </div>`;
       }).join('');
