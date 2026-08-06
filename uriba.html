@@ -693,7 +693,6 @@ function showToast(msg, isError) {
 function loadState() {
   let s = null;
   try { s = localStorage.getItem(stateKey()); } catch(e) {}
-  // one-time migration: adopt the old shared key as the anon store
   if (!s && !currentUser) {
     try { s = localStorage.getItem('uriba_state'); } catch(e) {}
   }
@@ -701,6 +700,17 @@ function loadState() {
     try { state = JSON.parse(s); } catch(e) { state = { layouts: [], currentLayoutId: null, view: 'gallery' }; }
   } else {
     state = { layouts: [], currentLayoutId: null, view: 'gallery' };
+  }
+  if (state.layouts) {
+    state.layouts = fbFixArrays(state.layouts);
+    state.layouts.forEach(ly => {
+      if (!Array.isArray(ly.projects)) ly.projects = ly.projects ? Object.values(ly.projects) : [];
+      if (!Array.isArray(ly.months)) ly.months = ly.months ? Object.values(ly.months) : [];
+      ly.months.forEach(m => {
+        if (!Array.isArray(m.fixtures)) m.fixtures = m.fixtures ? Object.values(m.fixtures) : [];
+        if (!Array.isArray(m.annotations)) m.annotations = m.annotations ? Object.values(m.annotations) : [];
+      });
+    });
   }
 }
 
@@ -2013,6 +2023,11 @@ function getSelectedColor(containerId) {
 function renderProjects() {
   const ly = currentLayout();
   const list = document.getElementById('projectList');
+  list.innerHTML = '';
+  if (!ly || !Array.isArray(ly.projects)) {
+    if (ly && ly.projects) ly.projects = Object.values(ly.projects);
+    else if (ly) ly.projects = [];
+  }
   if (!ly || ly.projects.length === 0) {
     list.innerHTML = '<div style="text-align:center;padding:20px;color:#adb5bd;font-size:12px">「＋」で企画を追加</div>';
     return;
