@@ -86,7 +86,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .floor-scaler { transform-origin: 0 0; transition: transform .15s; }
 .floor { position: relative; background: var(--surface); background-image: linear-gradient(to right, var(--grid-dot) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-dot) 1px, transparent 1px); background-size: var(--grid-size) var(--grid-size); box-shadow: var(--shadow); margin: 20px; min-width: 800px; min-height: 600px; touch-action: pan-x pan-y; }
 .floor.no-grid { background-image: none; }
-.zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 4px; z-index: 20; }
+.zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 4px; z-index: 20; pointer-events: auto; }
 .zoom-controls button { width: 32px; height: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
 .zoom-controls button:hover { background: #f1f3f5; }
 .zoom-controls .zoom-label { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 11px; display: flex; align-items: center; box-shadow: var(--shadow); }
@@ -314,9 +314,11 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
       <button class="tool-btn" onclick="deleteSelected()">🗑<span class="tip">削除</span></button>
     </div>
 
-    <div class="canvas-wrap" id="canvasWrap">
-      <div class="floor-scaler" id="floorScaler">
-        <div class="floor" id="floor"></div>
+    <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="canvas-wrap" id="canvasWrap" style="flex:1">
+        <div class="floor-scaler" id="floorScaler">
+          <div class="floor" id="floor"></div>
+        </div>
       </div>
       <div class="zoom-controls">
         <button onclick="zoomFloor(-1)">−</button>
@@ -2572,7 +2574,7 @@ function renderElevation() {
     container.innerHTML = `<div class="shelf-view">
       ${elev.rows.map((row, ri) => `<div class="shelf-row" style="position:relative">
         ${elev.rows.length > 1 ? `<div style="position:absolute;top:-6px;left:-6px;background:var(--danger);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:4" onclick="removeShelfRow(${ri})">×</div>` : ''}
-        ${row.items.map((item, ii) => `<div class="shelf-item${item.jan ? ' placed' : ''}${isItemAtPeak(item) ? ' elev-peak' : ''}" style="background:${item.color || '#e9ecef'};flex:${item.span || 1};height:auto;min-height:50px;padding:4px 6px" onclick="editItem('shelf',${ri},${ii})">
+        ${row.items.map((item, ii) => `<div class="shelf-item${item.jan ? ' placed' : ''}${isItemAtPeak(item) ? ' elev-peak' : ''}" data-row="${ri}" data-idx="${ii}" style="background:${item.color || '#e9ecef'};flex:${item.span || 1};height:auto;min-height:50px;padding:4px 6px" onclick="editItem('shelf',${ri},${ii})" onmousedown="elevDragStart(event,${ri},${ii})" ontouchstart="elevTouchStart(event,${ri},${ii})">
           <span style="font-size:11px;font-weight:600">${esc(item.label || '?')}</span>${elevItemInfo(item)}<div class="del-x" onclick="event.stopPropagation();removeItem('shelf',${ri},${ii})">×</div>
           ${ii > 0 ? `<div class="move-btn move-l" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},-1)">◀</div>` : ''}
           ${ii < row.items.length - 1 ? `<div class="move-btn move-r" onclick="event.stopPropagation();moveItem('shelf',${ri},${ii},1)">▶</div>` : ''}
@@ -2606,6 +2608,108 @@ function removeShelfRow(rowIdx) {
   renderElevation();
 }
 
+let _elevDrag = null;
+let _elevDragDone = false;
+function elevDragStart(e, row, idx) {
+  if (e.target.closest('.del-x') || e.target.closest('.move-btn')) return;
+  const el = e.currentTarget;
+  _elevDrag = { row, idx, startX: e.clientX, startY: e.clientY, active: false, el };
+  function onMove(ev) {
+    const dx = ev.clientX - _elevDrag.startX, dy = ev.clientY - _elevDrag.startY;
+    if (!_elevDrag.active && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      _elevDrag.active = true;
+      _elevDragDone = true;
+      el.style.opacity = '0.5';
+      elevShowDropZones(_elevDrag.row);
+    }
+    if (_elevDrag.active) elevHighlightTarget(ev.clientY);
+  }
+  function onUp(ev) {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (_elevDrag.active) {
+      elevDoDrop(ev.clientY);
+      el.style.opacity = '';
+    }
+    _elevDrag = null;
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function elevTouchStart(e, row, idx) {
+  if (e.target.closest('.del-x') || e.target.closest('.move-btn')) return;
+  const el = e.currentTarget;
+  const p = e.touches[0];
+  let holdTimer = setTimeout(() => {
+    holdTimer = null;
+    _elevDrag = { row, idx, active: true, el };
+    _elevDragDone = true;
+    el.style.opacity = '0.5';
+    if (navigator.vibrate) navigator.vibrate(30);
+    elevShowDropZones(row);
+  }, 400);
+  let cancelled = false;
+  function onMove(ev) {
+    const t = ev.touches[0];
+    if (holdTimer && (Math.abs(t.clientX - p.clientX) > 10 || Math.abs(t.clientY - p.clientY) > 10)) {
+      clearTimeout(holdTimer); holdTimer = null; cancelled = true; cleanup(); return;
+    }
+    if (_elevDrag && _elevDrag.active) { ev.preventDefault(); elevHighlightTarget(t.clientY); }
+  }
+  function onUp(ev) {
+    clearTimeout(holdTimer);
+    cleanup();
+    if (_elevDrag && _elevDrag.active) {
+      const t = ev.changedTouches[0];
+      elevDoDrop(t.clientY);
+      el.style.opacity = '';
+    }
+    _elevDrag = null;
+  }
+  function cleanup() {
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+    document.removeEventListener('touchcancel', onUp);
+  }
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onUp);
+  document.addEventListener('touchcancel', onUp);
+}
+
+function elevShowDropZones(fromRow) {
+  document.querySelectorAll('.shelf-row').forEach((r, ri) => {
+    if (ri === fromRow) return;
+    r.style.outline = '3px dashed var(--primary)';
+    r.style.outlineOffset = '2px';
+  });
+}
+
+function elevHighlightTarget(clientY) {
+  document.querySelectorAll('.shelf-row').forEach((r, ri) => {
+    const rect = r.getBoundingClientRect();
+    const hit = clientY >= rect.top && clientY <= rect.bottom;
+    r.style.background = hit && ri !== _elevDrag.row ? 'rgba(76,110,245,.15)' : '';
+  });
+}
+
+function elevDoDrop(clientY) {
+  document.querySelectorAll('.shelf-row').forEach(r => {
+    r.style.outline = ''; r.style.outlineOffset = ''; r.style.background = '';
+  });
+  if (!_elevDrag) return;
+  const elev = editorState.tempElevation;
+  let targetRow = -1;
+  document.querySelectorAll('.shelf-row').forEach((r, ri) => {
+    const rect = r.getBoundingClientRect();
+    if (clientY >= rect.top && clientY <= rect.bottom && ri !== _elevDrag.row) targetRow = ri;
+  });
+  if (targetRow < 0) return;
+  const item = elev.rows[_elevDrag.row].items.splice(_elevDrag.idx, 1)[0];
+  elev.rows[targetRow].items.push(item);
+  renderElevation();
+}
+
 // All catalog items belonging to a fixture: only from its LINKED project's
 // categories (so unrelated categories don't flood the list).
 function fixtureCatalogItems(f) {
@@ -2632,8 +2736,17 @@ function populateItemCatalog() {
   const items = fixtureCatalogItems(f);
   if (items.length === 0) { grp.style.display = 'none'; return; }
   grp.style.display = '';
+  const elev = editorState.tempElevation;
+  const placedJans = new Set();
+  if (elev) {
+    if (elev.rows) elev.rows.forEach(r => (r.items || []).forEach(it => { if (it.jan) placedJans.add(it.jan); }));
+    if (elev.hooks) elev.hooks.forEach(it => { if (it.jan) placedJans.add(it.jan); });
+  }
   sel.innerHTML = '<option value="">(選択してください)</option>' +
-    items.map(it => `<option value="${esc(it.jan)}">${esc(it.jan)} / ${esc(it.name)} / ${it.sales}個</option>`).join('');
+    items.map(it => {
+      const placed = placedJans.has(it.jan);
+      return `<option value="${esc(it.jan)}" style="${placed ? 'background:#1a1a2e;color:#fff;font-weight:700' : ''}">${placed ? '✔ ' : ''}${esc(it.jan)} / ${esc(it.name)} / ${it.sales}個</option>`;
+    }).join('');
 }
 
 // Look up a full catalog item (with weekly data) by JAN for the current fixture
@@ -2654,6 +2767,7 @@ function addItem(mode, rowIdx) {
 }
 
 function editItem(mode, rowIdx, itemIdx) {
+  if (_elevDragDone) { _elevDragDone = false; return; }
   const elev = editorState.tempElevation;
   let item;
   if (mode === 'shelf') item = elev.rows[rowIdx].items[itemIdx];
