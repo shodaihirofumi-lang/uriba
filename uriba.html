@@ -86,7 +86,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .floor-scaler { transform-origin: 0 0; transition: transform .15s; }
 .floor { position: relative; background: var(--surface); background-image: linear-gradient(to right, var(--grid-dot) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-dot) 1px, transparent 1px); background-size: var(--grid-size) var(--grid-size); box-shadow: var(--shadow); margin: 20px; min-width: 800px; min-height: 600px; touch-action: pan-x pan-y; }
 .floor.no-grid { background-image: none; }
-.zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 4px; z-index: 20; pointer-events: auto; }
+.zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 4px; z-index: 20; background: rgba(255,255,255,.9); border-radius: 8px; padding: 4px; backdrop-filter: blur(4px); box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 .zoom-controls button { width: 32px; height: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
 .zoom-controls button:hover { background: #f1f3f5; }
 .zoom-controls .zoom-label { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 11px; display: flex; align-items: center; box-shadow: var(--shadow); }
@@ -314,11 +314,9 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
       <button class="tool-btn" onclick="deleteSelected()">🗑<span class="tip">削除</span></button>
     </div>
 
-    <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0">
-      <div class="canvas-wrap" id="canvasWrap" style="flex:1">
-        <div class="floor-scaler" id="floorScaler">
-          <div class="floor" id="floor"></div>
-        </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="floor-scaler" id="floorScaler">
+        <div class="floor" id="floor"></div>
       </div>
       <div class="zoom-controls">
         <button onclick="zoomFloor(-1)">−</button>
