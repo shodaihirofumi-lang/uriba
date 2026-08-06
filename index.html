@@ -2556,9 +2556,11 @@ function elevItemInfo(item) {
   if (!item.jan) return '';
   const wq = itemWeekQty(item);
   const isPeak = isItemAtPeak(item);
-  const qtyTxt = wq !== null ? `<b style="color:${isPeak ? '#e03131' : 'var(--primary)'}"> ${wq}個/週</b>` : (item.sales ? `<span style="opacity:.6">${item.sales}個</span>` : '');
+  const qtyTxt = wq !== null
+    ? `<b style="font-size:15px;color:${isPeak ? '#e03131' : 'var(--primary)'}"> ${wq}個/週</b>`
+    : (item.sales ? `<span style="font-size:14px;opacity:.7">${item.sales}個</span>` : '');
   const peakTxt = isPeak && item.peakLabel ? `<br><span style="color:#e03131;font-weight:700">★ピーク${item.peakLabel}</span>` : '';
-  return `<div style="font-size:10px;line-height:1.3;margin-top:2px;pointer-events:none">${qtyTxt}${peakTxt}</div>`;
+  return `<div style="font-size:12px;line-height:1.4;margin-top:3px;pointer-events:none">${qtyTxt}${peakTxt}</div>`;
 }
 
 function renderElevation() {
