@@ -493,9 +493,9 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 
 <!-- Catalog Viewer -->
 <div class="modal-overlay" id="catalogModal">
-  <div class="modal" style="width:520px">
+  <div class="modal" style="width:95vw;max-width:900px">
     <div class="modal-header"><h3 id="catalogTitle">商品一覧</h3><button class="modal-close" onclick="closeModal('catalogModal')">&times;</button></div>
-    <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+    <div class="modal-body" style="max-height:80vh;overflow-y:auto;padding:12px">
       <div id="catalogList"></div>
     </div>
   </div>
@@ -2290,35 +2290,35 @@ function showCatalogView(projId, catName) {
 
   let barIdx = 0;
   el.innerHTML = `
-    <div id="catReadout" style="position:sticky;top:0;background:var(--primary-light);border:1px solid var(--primary);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--primary);font-weight:600;margin-bottom:8px;z-index:5">棒グラフをタップすると、その週の日付と売れ数が表示されます</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">期間: ${esc(firstRange)} 〜 ${esc(lastRange)}${boundaryIdx >= 0 ? '　（赤い点線＝年の変わり目）' : ''}</div>
+    <div id="catReadout" style="position:sticky;top:0;background:#fff3bf;border:2px solid #f59f00;border-radius:8px;padding:12px 14px;font-size:16px;color:#e67700;font-weight:700;margin-bottom:10px;z-index:5;min-height:48px;display:flex;align-items:center;text-align:center;justify-content:center">棒グラフをタップ → 週の売れ数</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">期間: ${esc(firstRange)} 〜 ${esc(lastRange)}${boundaryIdx >= 0 ? '　（赤い点線＝年の変わり目）' : ''}</div>
     ${items.map((it, i) => {
       const peak = Math.max(...it.weeks.map(w => w.qty));
       const peakW = it.weeks.find(w => w.qty === peak && w.qty > 0);
       const peakTxt = peakW ? 'ピーク ' + fmtWeekRange(peakW.year, peakW.week) : '';
       const bars = it.weeks.map((w, wi) => {
-        const h = w.qty > 0 ? Math.max(2, Math.round(w.qty / gMax * 34)) : 0;
-        const bl = (boundaryIdx === wi) ? 'border-left:1px dashed var(--danger);padding-left:1px' : '';
+        const h = w.qty > 0 ? Math.max(3, Math.round(w.qty / gMax * 56)) : 0;
+        const bl = (boundaryIdx === wi) ? 'border-left:2px dashed var(--danger);padding-left:1px' : '';
         const isPeak = w.qty === peak && w.qty > 0;
         const idx = barIdx++;
-        return `<div data-bar="${idx}" onclick="event.stopPropagation();document.getElementById('catReadout').textContent=window._catBarData[${idx}]" ontouchend="event.stopPropagation();document.getElementById('catReadout').textContent=window._catBarData[${idx}]" style="flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:48px;cursor:pointer;padding-top:10px;${bl}">
-          <div style="width:100%;max-width:12px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:1px 1px 0 0;pointer-events:none"></div>
+        return `<div data-bar="${idx}" onclick="event.stopPropagation();document.getElementById('catReadout').textContent=window._catBarData[${idx}]" ontouchend="event.stopPropagation();document.getElementById('catReadout').textContent=window._catBarData[${idx}]" style="flex:1;min-width:8px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:66px;cursor:pointer;padding-top:6px;${bl}">
+          <div style="width:100%;max-width:16px;height:${h}px;background:${isPeak ? 'var(--danger)' : 'var(--primary)'};border-radius:2px 2px 0 0;pointer-events:none"></div>
         </div>`;
       }).join('');
-      return `<div style="border-bottom:1px solid #eee;padding:6px 2px">
-        <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:2px">
-          <span style="color:#adb5bd;font-size:11px;width:22px;text-align:right">${i + 1}</span>
-          <b style="font-size:12px;flex:1">${esc(it.name)}</b>
-          <span style="font-weight:700;color:var(--primary);font-size:13px">計${it.sales}</span>
+      return `<div style="border-bottom:1px solid #eee;padding:10px 4px">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+          <span style="color:#adb5bd;font-size:13px;width:24px;text-align:right">${i + 1}</span>
+          <b style="font-size:14px;flex:1">${esc(it.name)}</b>
+          <span style="font-weight:700;color:var(--primary);font-size:15px">計${it.sales}</span>
         </div>
-        <div style="display:flex;align-items:baseline;gap:6px;padding-left:28px;margin-bottom:1px">
-          <span style="font-size:10px;color:var(--text3)">${esc(it.jan)}</span>
-          <span style="font-size:10px;color:var(--danger)">${esc(peakTxt)}</span>
+        <div style="display:flex;align-items:baseline;gap:8px;padding-left:32px;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--text3)">${esc(it.jan)}</span>
+          <span style="font-size:11px;color:var(--danger);font-weight:600">${esc(peakTxt)}</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:1px;padding-left:28px">${bars}</div>
+        <div style="display:flex;align-items:flex-end;gap:1px;padding-left:32px">${bars}</div>
       </div>`;
     }).join('')}
-    <div style="display:flex;padding-left:28px;margin-top:2px"><span style="flex:1;font-size:9px;color:#adb5bd">${esc(firstRange)}</span><span style="font-size:9px;color:#adb5bd">${esc(lastRange)}</span></div>`;
+    <div style="display:flex;padding-left:32px;margin-top:4px"><span style="flex:1;font-size:10px;color:#adb5bd">${esc(firstRange)}</span><span style="font-size:10px;color:#adb5bd">${esc(lastRange)}</span></div>`;
   openModal('catalogModal');
 }
 
