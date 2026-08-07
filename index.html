@@ -270,6 +270,7 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
     <h1>URIBA</h1>
     <input class="gallery-filter" type="search" placeholder="店舗名・レイアウト名で絞り込み..." id="galleryFilter" name="uriba_gallery_search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
     <span style="flex:1"></span>
+    <button class="btn btn-outline" onclick="showThemeModal()">🎨</button>
     <button class="btn btn-outline" onclick="showQrModal()">QR</button>
     <button class="btn btn-outline" onclick="importLayout()">取り込み</button>
     <button class="btn btn-outline" onclick="showLoginUI()" id="authBtn">ログイン</button>
@@ -474,6 +475,14 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
         <button class="btn btn-primary" onclick="saveItem()">保存</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Theme Picker -->
+<div class="modal-overlay" id="themeModal">
+  <div class="modal" style="width:480px;max-width:95vw">
+    <div class="modal-header"><h3>テーマカラー</h3><button class="modal-close" onclick="closeModal('themeModal')">&times;</button></div>
+    <div class="modal-body" id="themeList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;padding:16px"></div>
   </div>
 </div>
 
@@ -2991,6 +3000,63 @@ function autoAssignPriority() {
 function openModal(id) {
   document.getElementById(id).classList.add('active');
 }
+// ── Theme ──
+const UI_THEMES = [
+  { id:'default', name:'デフォルト', primary:'#4c6ef5', bg:'#f8f9fa', surface:'#fff', toolbar:'#212529', text:'#212529', border:'#dee2e6', grid:'#e8e8e8' },
+  { id:'dark', name:'ダーク', primary:'#748ffc', bg:'#1a1b1e', surface:'#25262b', toolbar:'#141517', text:'#c1c2c5', border:'#373a40', grid:'#373a40' },
+  { id:'navy', name:'ネイビー', primary:'#5c7cfa', bg:'#0f1626', surface:'#1b2540', toolbar:'#0a0f1a', text:'#c8d6e5', border:'#2d3a52', grid:'#2d3a52' },
+  { id:'green', name:'フォレスト', primary:'#40c057', bg:'#f0faf0', surface:'#fff', toolbar:'#1b4332', text:'#1b4332', border:'#c3e6cb', grid:'#d4edda' },
+  { id:'rose', name:'ローズ', primary:'#e64980', bg:'#fff5f5', surface:'#fff', toolbar:'#4a1028', text:'#3d0d1b', border:'#f1c0c0', grid:'#fde8e8' },
+  { id:'orange', name:'オレンジ', primary:'#fd7e14', bg:'#fff8f0', surface:'#fff', toolbar:'#5c3d10', text:'#3d2800', border:'#f0d0a0', grid:'#fde8c8' },
+  { id:'purple', name:'パープル', primary:'#7950f2', bg:'#f8f5ff', surface:'#fff', toolbar:'#2e1065', text:'#2e1065', border:'#d0bfff', grid:'#e8dff5' },
+  { id:'mono', name:'モノクロ', primary:'#555', bg:'#f5f5f5', surface:'#fff', toolbar:'#222', text:'#222', border:'#ccc', grid:'#ddd' },
+  { id:'ocean', name:'オーシャン', primary:'#1098ad', bg:'#f0fcff', surface:'#fff', toolbar:'#0b4a5c', text:'#0b3948', border:'#a8dce6', grid:'#c5eef5' },
+  { id:'sunset', name:'サンセット', primary:'#f76707', bg:'#fff4e6', surface:'#fff', toolbar:'#5c2d0e', text:'#3d1f00', border:'#ffc078', grid:'#ffe0b2' },
+];
+
+function showThemeModal() {
+  const list = document.getElementById('themeList');
+  const current = localStorage.getItem('uriba_theme') || 'default';
+  list.innerHTML = UI_THEMES.map(t => {
+    const sel = t.id === current;
+    return `<div onclick="applyTheme('${t.id}')" style="cursor:pointer;border:3px solid ${sel ? t.primary : 'transparent'};border-radius:10px;padding:10px;text-align:center;transition:.15s;background:${t.bg}">
+      <div style="display:flex;gap:4px;justify-content:center;margin-bottom:8px">
+        <div style="width:24px;height:24px;border-radius:50%;background:${t.primary}"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:${t.toolbar}"></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:${t.surface};border:1px solid ${t.border}"></div>
+      </div>
+      <div style="font-size:12px;font-weight:${sel ? '700' : '500'};color:${t.text}">${t.name}</div>
+    </div>`;
+  }).join('');
+  openModal('themeModal');
+}
+
+function applyTheme(id) {
+  const t = UI_THEMES.find(x => x.id === id) || UI_THEMES[0];
+  const r = document.documentElement.style;
+  r.setProperty('--primary', t.primary);
+  r.setProperty('--primary-light', t.id === 'dark' || t.id === 'navy' ? t.surface : '');
+  r.setProperty('--bg', t.bg);
+  r.setProperty('--surface', t.surface);
+  r.setProperty('--toolbar-bg', t.toolbar);
+  r.setProperty('--toolbar-text', t.id === 'dark' || t.id === 'navy' ? '#e0e0e0' : '#f8f9fa');
+  r.setProperty('--text', t.text);
+  r.setProperty('--text2', t.text);
+  r.setProperty('--text3', t.text);
+  r.setProperty('--border', t.border);
+  r.setProperty('--grid-dot', t.grid);
+  r.setProperty('--danger', '#e03131');
+  r.setProperty('--success', '#37b24d');
+  document.body.style.background = t.bg;
+  localStorage.setItem('uriba_theme', id);
+  closeModal('themeModal');
+}
+
+(function() {
+  const saved = localStorage.getItem('uriba_theme');
+  if (saved && saved !== 'default') applyTheme(saved);
+})();
+
 // ── QR Code ──
 function showQrModal() {
   document.getElementById('qrModal').classList.add('active');
