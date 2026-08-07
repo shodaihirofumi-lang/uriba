@@ -1665,7 +1665,16 @@ function startMouseFixtureDrag(e, fixture) {
   function onUp() {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
-    if (!dragged) showFixtureModal(fixture.id);
+    if (!dragged) {
+      const now = Date.now();
+      if (now - lastTapTime < 400 && lastTapFxId === fixture.id) {
+        showFixtureModal(fixture.id);
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+        lastTapFxId = fixture.id;
+      }
+    }
     saveState();
   }
   document.addEventListener('mousemove', onMove);
@@ -1716,7 +1725,14 @@ function startTouchFixtureDrag(e, fixture) {
     clearTimeout(holdTimer);
     cleanup();
     if (!dragActive && !cancelled) {
-      showFixtureQuickMenu(fixture.id);
+      const now2 = Date.now();
+      if (now2 - lastTapTime < 400 && lastTapFxId === fixture.id) {
+        showFixtureQuickMenu(fixture.id);
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now2;
+        lastTapFxId = fixture.id;
+      }
     }
     if (el) el.style.boxShadow = '';
     if (dragActive) saveState();
